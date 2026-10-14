@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# Download and extract the most recent Project Quarm database dump from
-# SecretsOTheP/EQMacEmu (utils/sql/database_full).
+# Download the most recent Project Quarm database dump from SecretsOTheP/EQMacEmu
+# (utils/sql/database_full), convert it to SQLite, and remove the MariaDB dump.
 #
 # Usage: scripts/fetch_latest_db.sh [--check] [--force]
-#   --check  Only report the latest upstream dump and whether it is present locally.
-#   --force  Re-download and re-extract even if the latest dump is already present.
+#   --check  Only report the latest upstream dump and whether the local database is built from it.
+#   --force  Re-download and re-convert even if the local database is already current.
 #
 # Env:
-#   QUARM_DATA_DIR  Where to store dumps (default: <repo>/data)
+#   QUARM_DATA_DIR  Where to store the database (default: <repo>/data)
 #   GITHUB_TOKEN    Optional; raises the GitHub API rate limit.
 set -euo pipefail
 
@@ -18,7 +18,7 @@ NAME_RE='^quarm_[0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9]{2}_[0-9]{2}\.tar\.gz$'
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DATA_DIR="${QUARM_DATA_DIR:-$(dirname "$SCRIPT_DIR")/data}"
-CURRENT_DIR="$DATA_DIR/current"
+DB_FILE="$DATA_DIR/quarm.sqlite"
 
 check_only=0
 force=0
@@ -31,7 +31,7 @@ for arg in "$@"; do
   esac
 done
 
-for cmd in curl jq tar git; do
+for cmd in curl jq tar git python3; do
   command -v "$cmd" >/dev/null || { echo "Missing required command: $cmd" >&2; exit 1; }
 done
 
@@ -48,9 +48,16 @@ name="$(jq -r .name <<<"$latest")"
 sha="$(jq -r .sha <<<"$latest")"          # git blob SHA of the file
 url="$(jq -r .download_url <<<"$latest")"
 version="${name#quarm_}"; version="${version%.tar.gz}"
-tarball="$DATA_DIR/$name"
 
-local_version="$(cat "$CURRENT_DIR/VERSION" 2>/dev/null || true)"
+# The version the local SQLite database was built from (recorded by mariadb_to_sqlite.py).
+local_version="$(python3 -I -c '
+import sqlite3, sys
+try:
+    db = sqlite3.connect(f"file:{sys.argv[1]}?mode=ro", uri=True)
+    print(db.execute("select value from _meta where key = ?", ("source_version",)).fetchone()[0])
+except Exception:
+    pass
+' "$DB_FILE")"
 echo "Latest upstream dump: $name"
 echo "Local version:        ${local_version:-<none>}"
 
@@ -58,52 +65,38 @@ if (( check_only )); then
   [[ "$local_version" == "$version" ]] && exit 0 || exit 1
 fi
 
-if [[ "$local_version" == "$version" && -f "$tarball" ]] && (( ! force )); then
+if [[ "$local_version" == "$version" ]] && (( ! force )); then
   echo "Already up to date."
   exit 0
 fi
 
+# Everything MariaDB-specific lives in this work dir and is removed on exit, success or not.
 mkdir -p "$DATA_DIR"
-tmp="$(mktemp "$DATA_DIR/.download.XXXXXX")"
-tmp_extract=""
-trap 'rm -rf "$tmp" ${tmp_extract:+"$tmp_extract"}' EXIT
+work="$(mktemp -d "$DATA_DIR/.work.XXXXXX")"
+trap 'rm -rf "$work"' EXIT
 
-if [[ -f "$tarball" && "$(git hash-object "$tarball")" == "$sha" ]] && (( ! force )); then
-  echo "Tarball already downloaded and verified."
-else
-  echo "Downloading $url"
-  curl -sSfL --retry 3 -o "$tmp" "$url"
-  actual_sha="$(git hash-object "$tmp")"
-  if [[ "$actual_sha" != "$sha" ]]; then
-    echo "Checksum mismatch: expected $sha, got $actual_sha" >&2
-    exit 1
-  fi
-  chmod 644 "$tmp"
-  mv "$tmp" "$tarball"
+echo "Downloading $url"
+curl -sSfL --retry 3 -o "$work/$name" "$url"
+actual_sha="$(git hash-object "$work/$name")"
+if [[ "$actual_sha" != "$sha" ]]; then
+  echo "Checksum mismatch: expected $sha, got $actual_sha" >&2
+  exit 1
 fi
 
-# Extract into a fresh directory, then swap it in.
-tmp_extract="$(mktemp -d "$DATA_DIR/.extract.XXXXXX")"
-chmod 755 "$tmp_extract"
-tar -xzf "$tarball" -C "$tmp_extract"
+mkdir "$work/sql"
+tar -xzf "$work/$name" -C "$work/sql"
 
-# Upstream member names embed the timestamp with colons (e.g. quarm_2026-09-27-22:44.sql).
-# Provide stable, colon-free symlinks for tooling.
+# Upstream member names embed the timestamp with colons (e.g. quarm_2026-09-27-22:44.sql);
+# the converter expects the colon-free names (quarm.sql, player_tables.sql, ...).
 (
-  cd "$tmp_extract"
+  cd "$work/sql"
   for f in *.sql; do
     stable="$(sed -E 's/_[0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9]{2}:[0-9]{2}\.sql$/.sql/' <<<"$f")"
     [[ "$stable" != "$f" ]] && ln -s "$f" "$stable"
   done
 )
-echo "$version" > "$tmp_extract/VERSION"
+echo "$version" > "$work/sql/VERSION"
 
-rm -rf "$CURRENT_DIR"
-mv "$tmp_extract" "$CURRENT_DIR"
-tmp_extract=""
+"$SCRIPT_DIR/mariadb_to_sqlite.py" --src "$work/sql" --out "$DB_FILE"
 
-# Only the most recent dump is kept.
-find "$DATA_DIR" -maxdepth 1 -name 'quarm_*.tar.gz' ! -name "$name" -delete
-
-echo "Extracted to $CURRENT_DIR:"
-ls -l "$CURRENT_DIR"
+echo "Removed MariaDB dump; database is at $DB_FILE"

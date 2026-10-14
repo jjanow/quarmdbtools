@@ -1,12 +1,11 @@
 # TODO
 
 ## Loading the data
-- [ ] Decide on a query backend:
-  - MariaDB in Docker (`docker compose` + import script). This is the most faithful option and needs no conversion.
-  - Convert to SQLite for a zero-server, single-file DB. This needs a converter that handles the MariaDB-isms
-    (`/*M!...*/` comments, `ENGINE=MyISAM`, `unsigned`, backtick quoting, multi-row `INSERT`s).
-- [ ] Script to (re)import `data/current/` into the chosen backend after `fetch_latest_db.sh`.
-- [ ] Optionally chain fetch + import into one "refresh" command.
+- [x] Query backend: SQLite, via `scripts/mariadb_to_sqlite.py` (MariaDB-in-Docker remains an option if exact MariaDB semantics are ever needed).
+- [x] Script to build the database from an extracted dump.
+- [x] `fetch_latest_db.sh` fetches, converts, and removes the MariaDB dump in one step.
+- [ ] Add an FTS5 table for item/NPC/spell name search if `LIKE` turns out to be too limited.
+- [ ] Add tests for the converter's value parser (escapes, doubled quotes, failure cases).
 - [ ] Decide whether server config (`data_tables.sql`: `rule_values`, `variables`, ...) is worth exposing in analysis, e.g. rules that affect drop and XP rates.
 
 ## Schema exploration
