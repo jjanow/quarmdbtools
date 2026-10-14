@@ -2,6 +2,7 @@
 """Convert the extracted Project Quarm MariaDB dump into a single SQLite database.
 
 Usage: scripts/mariadb_to_sqlite.py --src DIR [--out FILE] [FILE ...]
+       scripts/mariadb_to_sqlite.py --fts-only FILE
 
 Normally run by fetch_latest_db.sh, which extracts the dump to a temp dir, calls this,
 and deletes the dump. Reads the .sql files in DIR and writes data/quarm.sqlite. Values are parsed and bound as parameters, never rewritten as SQL text.
@@ -18,6 +19,8 @@ Conversion choices:
   * ON UPDATE CURRENT_TIMESTAMP has no SQLite equivalent and is dropped.
   * Secondary keys become standalone indexes named "<table>__<key>". FULLTEXT keys become
     plain indexes (SQLite full-text search would need a separate FTS5 table).
+  * Name search: FTS5 tables items_fts, npc_types_fts and spells_new_fts (see build_fts)
+    are built after the load. --fts-only rebuilds them in an existing database.
 """
 import argparse
 import datetime
@@ -43,6 +46,14 @@ TYPE_AFFINITY = {
 }
 TEXT_TYPES = {"char", "varchar", "tinytext", "text", "mediumtext", "longtext"}
 
+# Name-search FTS5 tables: source table -> FTS table. Each FTS table is a plain (self-contained)
+# FTS5 table with columns (name, id UNINDEXED) and rowid = id. External content isn't used
+# because items.id is not a rowid alias (items has no PRIMARY KEY, only a unique index).
+# unicode61 splits on '_' and punctuation, so 'a_gnoll_pup' and '#Shaman_Ren`Rex' tokenize
+# into words. prefix='2 3' speeds up short prefix queries such as 'flam*'.
+FTS_TABLES = {"items": "items_fts", "npc_types": "npc_types_fts", "spells_new": "spells_new_fts"}
+FTS_OPTIONS = "tokenize = \"unicode61 remove_diacritics 2 separators '_'\", prefix = '2 3'"
+
 # A single-quoted MariaDB string literal (backslash escapes and doubled quotes), unrolled for speed.
 STRING_RE = r"'([^'\\]*(?:(?:\\.|'')[^'\\]*)*)'"
 VALUE_RE = re.compile(
@@ -67,7 +78,7 @@ COLUMN_OPTION_RE = re.compile(
 )
 KEY_RE = re.compile(r"(?P<kind>PRIMARY KEY|UNIQUE KEY|FULLTEXT KEY|KEY) (?:`(?P<name>[^`]+)` )?\((?P<cols>[^)]*(?:\(\d+\)[^)]*)*)\)(?: USING (?:BTREE|HASH))?")
 KEY_COL_RE = re.compile(r"`([^`]+)`(?:\(\d+\))?")
-TABLE_END_RE = re.compile(r"\) ENGINE=\w+(?: AUTO_INCREMENT=\d+)?(?: DEFAULT CHARSET=(?P<charset>\w+))?(?: COLLATE=(?P<collate>\w+))?(?: (?:ROW_FORMAT|PACK_KEYS)=\w+)*(?: COMMENT='[^']*')?;")
+TABLE_END_RE = re.compile(r"\) ENGINE=\w+(?: AUTO_INCREMENT=\d+)?(?: DEFAULT CHARSET=(?P<charset>\w+))?(?: COLLATE=(?P<collate>\w+))?(?: (?:ROW_FORMAT|PACK_KEYS)=\w+)*(?: COMMENT='(?:[^']|'')*')?;")
 
 
 class ConvertError(Exception):
@@ -141,7 +152,7 @@ class Table:
         self.name = name
         self.columns = []        # (name, sqlite_decl)
         self.mariadb_types = []  # (name, original type text)
-        self.text_columns = []   # (index in columns, name, explicit collation or None)
+        self.text_columns = []   # (index in columns, explicit collation or None)
         self.primary_key = None
         self.indexes = []        # (unique, key name, [cols])
 
@@ -168,6 +179,7 @@ class Table:
             raise ConvertError(f"unsupported column type {mtype!r} in {line!r}")
         parts = [quote_ident(name), TYPE_AFFINITY[mtype]]
         collate = None
+        modifiers = []  # unsigned/zerofill, kept for _column_types
         pos = 0
         while pos < len(rest):
             o = COLUMN_OPTION_RE.match(rest, pos)
@@ -188,13 +200,14 @@ class Table:
                     parts.append("DEFAULT " + d)
             elif o.group("collate"):
                 collate = o.group("collate")
-            # unsigned/zerofill/NULL/AUTO_INCREMENT/ON UPDATE/CHARACTER SET/COMMENT: no SQLite equivalent needed
+            elif o.group("unsigned"):
+                modifiers.append(o.group("unsigned"))
+            # NULL/AUTO_INCREMENT/ON UPDATE/CHARACTER SET/COMMENT: no SQLite equivalent needed
         if mtype in TEXT_TYPES:
             self.text_columns.append((len(self.columns), collate))
         self.columns.append([name, parts])
         type_text = mtype + (f"({m.group('args')})" if m.group("args") is not None else "")
-        if re.search(r"\bunsigned\b", rest):
-            type_text += " unsigned"
+        type_text = " ".join([type_text] + modifiers)
         self.mariadb_types.append((name, type_text))
 
     def finish(self, end_line):
@@ -297,12 +310,65 @@ class Converter:
                 self.conn.execute(sql)
 
 
+def build_fts(conn):
+    """(Re)build the name-search FTS5 tables in conn; returns the FTS table names built.
+
+    Idempotent: each FTS table is dropped and rebuilt from its source table. A missing source
+    table is skipped (and any stale FTS table for it dropped). Runs inside a savepoint, so it
+    works both within an open transaction and in autocommit mode.
+    """
+    built = []
+    conn.execute("SAVEPOINT build_fts")
+    try:
+        for source, fts in FTS_TABLES.items():
+            conn.execute(f"DROP TABLE IF EXISTS {quote_ident(fts)}")
+            if not conn.execute("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?", (source,)).fetchone():
+                continue
+            conn.execute(f"CREATE VIRTUAL TABLE {quote_ident(fts)} USING fts5(name, id UNINDEXED, {FTS_OPTIONS})")
+            # A few item names end in a NUL byte upstream; index them without it. The explicit
+            # rowid also makes a duplicate id fail loudly instead of indexing it twice.
+            rows = conn.execute(f"SELECT id, name FROM {quote_ident(source)} WHERE name IS NOT NULL AND name != ''")
+            conn.executemany(
+                f"INSERT INTO {quote_ident(fts)} (rowid, name, id) VALUES (?, ?, ?)",
+                ((i, n.rstrip("\0"), i) for i, n in rows),
+            )
+            conn.execute(f"INSERT INTO {quote_ident(fts)} ({quote_ident(fts)}) VALUES ('optimize')")
+            built.append(fts)
+    except BaseException:
+        conn.execute("ROLLBACK TO build_fts")
+        conn.execute("RELEASE build_fts")
+        raise
+    conn.execute("RELEASE build_fts")
+    return built
+
+
+def fts_only(path):
+    if not path.is_file():
+        sys.exit(f"No such database: {path}")
+    started = time.monotonic()
+    conn = sqlite3.connect(path, isolation_level=None)
+    try:
+        built = build_fts(conn)
+    except sqlite3.Error as e:
+        sys.exit(f"Building FTS tables failed: {e}")
+    finally:
+        conn.close()
+    print(f"Built {', '.join(built) or 'no FTS tables'} in {path} in {time.monotonic() - started:.1f}s")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    parser.add_argument("--src", type=Path, required=True, help="directory with the extracted dump")
+    mode = parser.add_mutually_exclusive_group(required=True)
+    mode.add_argument("--src", type=Path, help="directory with the extracted dump")
+    mode.add_argument("--fts-only", type=Path, metavar="FILE",
+                      help="only (re)build the name-search FTS5 tables in an existing SQLite file, in place")
     parser.add_argument("--out", type=Path, default=DEFAULT_OUT, help=f"SQLite file to write (default: {DEFAULT_OUT})")
     parser.add_argument("files", nargs="*", default=DEFAULT_FILES, help=f"dump files to load, in order (default: {' '.join(DEFAULT_FILES)})")
     args = parser.parse_args()
+    if args.fts_only is not None:
+        if args.files != DEFAULT_FILES or args.out != DEFAULT_OUT:
+            parser.error("--fts-only takes no --out or dump files")
+        return fts_only(args.fts_only)
 
     paths = [args.src / f for f in args.files]
     missing = [str(p) for p in paths if not p.is_file()]
@@ -328,6 +394,11 @@ def main():
             converter.convert_file(path)
         print("Creating indexes ...", flush=True)
         converter.create_indexes()
+        print("Building FTS tables ...", flush=True)
+        try:
+            build_fts(conn)
+        except sqlite3.Error as e:
+            raise ConvertError(f"building FTS tables: {e}") from e
         conn.executemany("INSERT INTO _meta VALUES (?, ?)", [
             ("source_version", version),
             ("source_files", " ".join(args.files)),

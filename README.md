@@ -10,7 +10,8 @@ repository. This repo converts the **most recent** dump into a local SQLite data
 ## Requirements
 
 - `bash`, `curl`, `jq`, `tar`, `git`
-- Python 3.8+ (standard library only)
+- Python 3.8+ (standard library only), with an SQLite that includes FTS5 (standard in python.org and
+  most distro builds)
 
 ## Getting the database
 
@@ -39,9 +40,10 @@ Set `GITHUB_TOKEN` to raise the API rate limit, or `QUARM_DATA_DIR` to keep the 
 ## SQLite conversion
 
 `scripts/mariadb_to_sqlite.py` is a stdlib-only Python script. `fetch_latest_db.sh` runs it, or you
-can run it on an extracted dump yourself with `scripts/mariadb_to_sqlite.py --src DIR`. It reads the
+can run it on an extracted dump yourself with `scripts/mariadb_to_sqlite.py --src DIR`
+(`--fts-only FILE` only rebuilds the name-search tables in an existing database). It reads the
 dump line by line, parses each value (including MariaDB backslash escapes), and inserts it with bound
-parameters. The latest dump takes about 15 seconds and produces about 85 MB. It writes to a temp file
+parameters. The latest dump takes about 15 seconds and produces about 91 MB. It writes to a temp file
 and only replaces `data/quarm.sqlite` on success. Anything it doesn't recognize (a new column type,
 table option or value literal) stops the conversion with the file and line number rather than being
 skipped.
@@ -49,7 +51,7 @@ skipped.
 How MariaDB features map to SQLite:
 
 - **Types:** columns use SQLite affinities (INTEGER/REAL/NUMERIC/TEXT/BLOB). The original MariaDB
-  types (e.g. `mediumint(8) unsigned`) are kept in the `_column_types` table.
+  types (e.g. `mediumint(8) unsigned`, including `zerofill`) are kept in the `_column_types` table.
 - **Case sensitivity:** text columns from case-insensitive (`*_ci`) collations get `COLLATE NOCASE`,
   so string comparisons ignore case as they do in MariaDB.
 - **Keys:** primary keys are preserved. Secondary and unique keys become indexes named
@@ -59,14 +61,49 @@ How MariaDB features map to SQLite:
   row-format options.
 - **Provenance:** the `_meta` table records the source dump version and the conversion time.
 
+### Name search (FTS5)
+
+`items_fts`, `npc_types_fts` and `spells_new_fts` index `items.Name`, `npc_types.name` and
+`spells_new.name`. Each has columns `name` and `id` (rowid = id); join back on `id`. Punctuation and
+`_` split words, so `pup gnoll` finds `a_gnoll_pup`; `flam*` is a prefix search, and `ORDER BY rank`
+sorts the best matches first. Item names are indexed without their trailing NUL. The tables are a
+snapshot built by the converter (about 4 MB). They don't follow edits to the base tables; rebuild them
+with `scripts/mariadb_to_sqlite.py --fts-only data/quarm.sqlite`.
+
+```sh
+sqlite3 data/quarm.sqlite "select i.id, i.Name from items_fts f join items i on i.id = f.id
+                           where items_fts match 'cloth cap' order by rank"
+```
+
+Wrap user-supplied terms in double quotes (doubling any `"`) so characters such as `'`, `-` or `:`
+aren't parsed as FTS5 syntax: `match '"kilva''s" flam*'`.
+
+## Schema docs
+
+- [docs/schema.md](docs/schema.md): the key tables (items, NPCs, spawns, loot, merchants, spells,
+  factions, zones, tradeskills, era gating), how they join, match rates and caveats, and an example
+  query for each area.
+- [docs/schema_reference.md](docs/schema_reference.md): every table with its row count, columns
+  (original MariaDB type, affinity, NOT NULL, default, NOCASE, primary key) and indexes. It is
+  generated, so don't edit it by hand. Regenerate it after fetching a new dump with
+  `scripts/gen_schema_ref.py`. The output is deterministic, so `git diff` shows what changed between
+  dumps.
+- [docs/server_config.md](docs/server_config.md): which server rules (`rule_values`, `variables`)
+  affect drop rates, XP and respawns, and a recommendation on exposing them in analysis.
+
 ## Tests
 
 ```sh
 python3 -m unittest discover tests
 ```
 
-Tests use only the standard library. They cover the converter's value parser: number and NULL
-literals, string escapes, row and statement boundaries, and rejecting literals it doesn't support.
+Tests use only the standard library. They cover:
+
+- the converter's value parser (`tests/test_value_parser.py`): number and NULL literals, string escapes,
+  row and statement boundaries, and rejecting literals it doesn't support;
+- schema conversion (`tests/test_schema_conversion.py`): column types and options, collations, keys,
+  table options, `_column_types`, errors, and an end-to-end conversion of a small dump;
+- the FTS5 name-search tables (`tests/test_fts.py`).
 
 ## Notes on the dump
 

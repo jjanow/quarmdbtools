@@ -4,24 +4,14 @@
 - [x] Query backend: SQLite, via `scripts/mariadb_to_sqlite.py` (MariaDB-in-Docker remains an option if exact MariaDB semantics are ever needed).
 - [x] Script to build the database from an extracted dump.
 - [x] `fetch_latest_db.sh` fetches, converts, and removes the MariaDB dump in one step.
-- [ ] Add an FTS5 table for item/NPC/spell name search if `LIKE` turns out to be too limited.
+- [x] FTS5 name search: `items_fts`, `npc_types_fts`, `spells_new_fts`, built by the converter (`--fts-only` rebuilds them).
 - [x] Add tests for the converter's value parser (`tests/test_value_parser.py`).
-- [ ] Add tests for schema conversion (column options, keys, table options) and a small end-to-end dump.
-- [ ] Decide whether server config (`data_tables.sql`: `rule_values`, `variables`, ...) is worth exposing in analysis, e.g. rules that affect drop and XP rates.
+- [x] Add tests for schema conversion (column options, keys, table options) and a small end-to-end dump (`tests/test_schema_conversion.py`).
+- [ ] Decide whether server config (`data_tables.sql`: `rule_values`, `variables`, ...) is worth exposing in analysis, e.g. rules that affect drop and XP rates. Recommendation in `docs/server_config.md`; awaiting a decision.
 
 ## Schema exploration
-- [ ] Document the key tables and how they join:
-  - Items: `items`
-  - NPCs: `npc_types`, `npc_types_metadata`, `npc_faction`, `npc_spells*`
-  - Spawns: `spawn2` → `spawngroup` → `spawnentry` → `npc_types`; `spawn_conditions`, `spawn_events`, `grid*`
-  - Loot: `npc_types.loottable_id` → `loottable` → `loottable_entries` → `lootdrop` → `lootdrop_entries` → `items`; `global_loot`
-  - Merchants: `merchantlist`
-  - Spells: `spells_new` / `spells_en`
-  - Factions: `faction_list`, `faction_list_mod`, `npc_faction_entries`
-  - Zones: `zone`, `zone_points`, `doors`, `object`, `ground_spawns`, `forage`, `fishing`
-  - Tradeskills: `tradeskill_recipe`, `tradeskill_recipe_entries`
-  - Era gating: `content_flags` (and `content_flags`/`min_expansion`-style columns on content tables)
-- [ ] Generate a schema reference (table/column list) automatically from the dump.
+- [x] Document the key tables and how they join: `docs/schema.md`.
+- [x] Generate a schema reference (table/column list) automatically from the dump: `scripts/gen_schema_ref.py` → `docs/schema_reference.md`.
 
 ## Analysis tools (ideas)
 - [ ] Item lookup: stats, which NPCs drop it (with drop chance), where those NPCs spawn, and merchants that sell it.
