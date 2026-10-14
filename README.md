@@ -59,6 +59,15 @@ How MariaDB features map to SQLite:
   row-format options.
 - **Provenance:** the `_meta` table records the source dump version and the conversion time.
 
+## Tests
+
+```sh
+python3 -m unittest discover tests
+```
+
+Tests use only the standard library. They cover the converter's value parser: number and NULL
+literals, string escapes, row and statement boundaries, and rejecting literals it doesn't support.
+
 ## Notes on the dump
 
 Each upstream tarball contains these files. The first four are loaded into the SQLite database.

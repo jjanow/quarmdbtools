@@ -5,7 +5,8 @@
 - [x] Script to build the database from an extracted dump.
 - [x] `fetch_latest_db.sh` fetches, converts, and removes the MariaDB dump in one step.
 - [ ] Add an FTS5 table for item/NPC/spell name search if `LIKE` turns out to be too limited.
-- [ ] Add tests for the converter's value parser (escapes, doubled quotes, failure cases).
+- [x] Add tests for the converter's value parser (`tests/test_value_parser.py`).
+- [ ] Add tests for schema conversion (column options, keys, table options) and a small end-to-end dump.
 - [ ] Decide whether server config (`data_tables.sql`: `rule_values`, `variables`, ...) is worth exposing in analysis, e.g. rules that affect drop and XP rates.
 
 ## Schema exploration
