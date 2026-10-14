@@ -12,13 +12,13 @@ options, value literals) is a hard error rather than being silently skipped.
 
 Conversion choices:
   * Column types map to SQLite affinities (INTEGER/REAL/NUMERIC/TEXT/BLOB). The original
-    MariaDB types (e.g. "mediumint(8) unsigned") are recorded in the _column_types table.
+    MariaDB types (e.g. "mediumint(8) unsigned", including zerofill) are recorded in the _column_types table.
   * Text columns get COLLATE NOCASE when the MariaDB collation is case-insensitive (*_ci),
     so `WHERE name = 'cloth cap'` behaves as it does in MariaDB.
   * MariaDB zero dates ('0000-00-00 00:00:00') are kept verbatim as text.
   * ON UPDATE CURRENT_TIMESTAMP has no SQLite equivalent and is dropped.
   * Secondary keys become standalone indexes named "<table>__<key>". FULLTEXT keys become
-    plain indexes (SQLite full-text search would need a separate FTS5 table).
+    plain indexes; name search uses the FTS5 tables below instead.
   * Name search: FTS5 tables items_fts, npc_types_fts and spells_new_fts (see build_fts)
     are built after the load. --fts-only rebuilds them in an existing database.
 """

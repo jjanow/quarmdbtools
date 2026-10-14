@@ -74,7 +74,8 @@ is case-insensitive (`COLLATE NOCASE`).
   column, and it is always `''`.
   The rule `Expansion:UseItemExpansionSetting=true` strips era-inappropriate item properties (focus, skill
   mods, bane, rec/req level) rather than hiding the item (inferred, based on the rule's note).
-- Watch out for names that end in a NUL byte (see README). Prefer `LIKE 'name%'` or the item id over `=`.
+- Watch out for names that end in a NUL byte (see README). Prefer `LIKE 'name%'`, the item id, or the
+  `items_fts` name-search table (which indexes names without the NUL) over `=`.
 
 ```sql
 -- Item stats plus the spells behind its click/proc/worn/focus effects.
@@ -116,6 +117,9 @@ WHERE i.Name LIKE 'Cloak of Flames%' OR i.Name LIKE 'Short Sword of the Ykesha%'
 - There are **duplicate NPC rows** for the same named mob. Lord Nagafen has ids 32040, 32340 and 77500. Two of them
   (32340 and 77500) have `exp_pct=1`, and 77500 also uses a special loot table (`Special_VoxNaggy`). Group by id, not by name.
 - 1,844 NPC types appear in no `spawnentry`. They're spawned by quests or scripts, or unused.
+- **Name matching.** Names use `_` for spaces, and `_` is also a `LIKE` wildcard, so `LIKE 'Lord_Nagafen'`
+  matches by accident. For word searches use `npc_types_fts` (see README), where `MATCH 'nagafen lord'`
+  finds it in any word order.
 
 ```sql
 -- NPC overview: faction, spell list (with parent), loot table, merchant list, emote set.

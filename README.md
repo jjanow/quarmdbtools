@@ -34,6 +34,8 @@ The script:
 5. Deletes the temp dir (tarball and extracted SQL). This happens even if a step fails, and a failed
    run leaves the existing database untouched.
 
+After fetching a new dump, run `scripts/gen_schema_ref.py` to refresh `docs/schema_reference.md`.
+
 Set `GITHUB_TOKEN` to raise the API rate limit, or `QUARM_DATA_DIR` to keep the database outside `data/`.
 `data/` is gitignored.
 
@@ -122,5 +124,6 @@ Each upstream tarball contains these files. The first four are loaded into the S
 - The main dump contains about 68 content tables. Most are MyISAM with latin1 collation; the dump file itself is UTF-8.
 - Upstream data quirk: a few item names end in a literal NUL byte (e.g. item 3860,
   `Glyphed Skin Sample - Wrist, Right\0`). The converter keeps it, so exact `=` matches on those names miss.
+  `items_fts` indexes the names without the NUL.
 
 See [TODO.md](TODO.md) for planned work.
