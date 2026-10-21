@@ -4,69 +4,84 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Research Needs</title>
-<!-- Template for quarmtools/tools/research.py, which replaces the DATA and NAV placeholders below. -->
+<!-- Template for quarmtools/tools/research.py, which replaces the THEME, DATA and NAV placeholders below. -->
 <style>
-:root {
-  --bg: #f7f7f5; --panel: #ffffff; --text: #1d1d1b; --muted: #6b6b66; --border: #dcdcd6;
-  --accent: #3b5bdb; --row-alt: #f1f1ec; --done: #9a9a94; --warn: #b35c00; --ok: #2b8a3e; --dup: #7048e8;
-}
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --bg: #161615; --panel: #1f1f1d; --text: #e8e8e3; --muted: #9a9a94; --border: #34342f;
-    --accent: #8ea2ff; --row-alt: #252522; --done: #6b6b66; --warn: #ffa94d; --ok: #69db7c; --dup: #b197fc;
-  }
-}
+/*THEME*/
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
-body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 system-ui, sans-serif; }
-header, main { max-width: 1400px; margin: 0 auto; padding: 16px; }
-header { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: end; }
-h1 { font-size: 20px; margin: 0 24px 0 0; }
-label { display: flex; flex-direction: column; gap: 2px; font-size: 12px; color: var(--muted); }
+body {
+  margin: 0; background: var(--bg); color: var(--text); font: 14px/1.5 var(--font); -webkit-font-smoothing: antialiased;
+  /* The table scrolls inside its panel and fills the rest of the window. */
+  display: flex; flex-direction: column; height: 100vh;
+}
+header, main { width: 100%; max-width: 1400px; margin: 0 auto; padding: 20px 24px; }
+header { flex: none; display: flex; flex-wrap: wrap; gap: 12px 20px; align-items: end; padding-bottom: 8px; }
+main { padding-top: 8px; flex: 1; min-height: 0; display: flex; flex-direction: column; }
+main > * { flex: none; }
+.tabs { align-self: flex-start; }
+h1 { font-size: 24px; font-weight: 650; letter-spacing: -0.01em; margin: 0 16px 0 0; }
+label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; font-weight: 500; color: var(--muted); }
 select, input[type=number], input[type=search] {
-  font: inherit; color: var(--text); background: var(--panel); border: 1px solid var(--border);
-  border-radius: 6px; padding: 5px 8px;
+  font: inherit; font-size: 14px; color: var(--text); background: var(--panel); border: 1px solid var(--border);
+  border-radius: 8px; padding: 6px 10px; box-shadow: var(--shadow); outline: none;
+  transition: border-color .15s, box-shadow .15s;
 }
-input[type=number] { width: 5em; }
-.check { flex-direction: row; align-items: center; gap: 6px; font-size: 13px; color: var(--text); }
-.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 12px; }
+::placeholder { color: var(--muted); opacity: .7; }
+select:focus, input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+input[type=number] { width: 5.5em; }
+input[type=search] { min-width: 16em; }
+input[type=checkbox] { accent-color: var(--accent); width: 15px; height: 15px; margin: 0; }
+.check { flex-direction: row; align-items: center; gap: 7px; font-size: 13px; font-weight: 400; color: var(--text); padding-bottom: 7px; }
+.tabs { display: inline-flex; gap: 2px; background: var(--panel-2); border: 1px solid var(--border); border-radius: 10px; padding: 3px; margin-bottom: 14px; }
 .tabs button {
-  font: inherit; background: none; border: 0; border-bottom: 2px solid transparent; color: var(--muted);
-  padding: 8px 12px; cursor: pointer;
+  font: inherit; font-weight: 500; background: none; border: 0; border-radius: 7px; color: var(--muted);
+  padding: 6px 14px; cursor: pointer; transition: background .15s, color .15s;
 }
-.tabs button[aria-selected=true] { color: var(--text); border-bottom-color: var(--accent); font-weight: 600; }
-.bar { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: end; margin-bottom: 10px; }
-.summary { color: var(--muted); margin: 0 0 10px; }
+.tabs button:hover { color: var(--text); }
+.tabs button[aria-selected=true] { color: var(--text); background: var(--panel); box-shadow: var(--shadow); }
+.bar { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: end; margin-bottom: 12px; }
+.summary { color: var(--muted); margin: 0 0 12px; }
 .summary b { color: var(--text); }
 button.csv {
-  font: inherit; margin-left: auto; padding: 5px 12px; border-radius: 6px; cursor: pointer;
-  border: 1px solid var(--border); background: var(--panel); color: var(--text);
+  font: inherit; font-weight: 500; margin-left: auto; padding: 6px 14px; border-radius: 8px; cursor: pointer;
+  border: 1px solid var(--accent); background: var(--accent); color: var(--on-accent); box-shadow: var(--shadow);
+  transition: filter .15s;
 }
-.wrap { overflow-x: auto; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; }
+button.csv:hover { filter: brightness(1.08); }
+.wrap { flex: 1 1 auto; overflow: auto; min-height: 200px; background: var(--panel); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow); }
 table { border-collapse: collapse; width: 100%; }
-th, td { padding: 6px 10px; text-align: left; vertical-align: top; border-bottom: 1px solid var(--border); }
-th { position: sticky; top: 0; background: var(--panel); cursor: pointer; user-select: none; white-space: nowrap; font-size: 12px; }
-th.num, td.num { text-align: right; }
-th[aria-sort=ascending]::after { content: " ▲"; }
-th[aria-sort=descending]::after { content: " ▼"; }
+th, td { padding: 8px 12px; text-align: left; vertical-align: top; border-bottom: 1px solid var(--border); }
+th {
+  position: sticky; top: 0; z-index: 1; background: var(--panel-2); cursor: pointer; user-select: none; white-space: nowrap;
+  font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--muted);
+}
+th:hover { color: var(--text); }
+th.num, td.num { text-align: right; font-variant-numeric: tabular-nums; }
+th[aria-sort=ascending]::after { content: " ▲"; color: var(--accent); }
+th[aria-sort=descending]::after { content: " ▼"; color: var(--accent); }
 tbody tr:nth-child(even) { background: var(--row-alt); }
+tbody tr:hover { background: var(--hover); }
+tbody tr:last-child td { border-bottom: 0; }
 tr.done td { color: var(--done); }
 tr.done a { color: var(--done); }
 tr.above td:first-child::after { content: " (above level)"; color: var(--muted); font-size: 12px; }
 a { color: var(--accent); text-decoration: none; }
 a:hover { text-decoration: underline; }
+hr { border: 0; border-top: 1px solid var(--border); margin: 6px 0; }
 .need { color: var(--warn); font-weight: 600; }
 .ok { color: var(--ok); }
 .dup { color: var(--dup); }
 .small { font-size: 12px; color: var(--muted); }
 ul.plain { margin: 0; padding: 0; list-style: none; }
-a.home { color: var(--accent); text-decoration: none; align-self: center; }
-footer { color: var(--muted); font-size: 12px; margin-top: 12px; }
+a.home { color: var(--accent); text-decoration: none; align-self: center; font-size: 13px; }
+footer { color: var(--muted); font-size: 12px; margin-top: 14px; }
 .buy { color: var(--accent); font-weight: 600; }
-.route { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; margin: 0 0 10px; }
+.route { background: var(--accent-soft); border: 1px solid var(--border); border-radius: 12px; padding: 10px 14px; margin: 0 0 12px; }
 details summary { cursor: pointer; color: var(--accent); }
 .route ol { margin: 4px 0 0; padding-left: 20px; }
-@media (max-width: 640px) { h1 { width: 100%; } button.csv { margin-left: 0; } }
+@media (max-width: 640px) { h1 { width: 100%; } button.csv { margin-left: 0; } input[type=search] { min-width: 0; } }
+/* Too short to fit the table beside everything else: let the page scroll instead. */
+@media (max-height: 520px) { body { display: block; height: auto; } .wrap { max-height: none; } }
 </style>
 </head>
 <body>
@@ -341,7 +356,8 @@ function toCsv() {
   a.href = URL.createObjectURL(blob);
   a.download = `research-${tab}-${isAll() ? "all" : character().name.replace(/\W+/g, "_")}.csv`;
   a.click();
-  URL.revokeObjectURL(a.href);
+  // Not right away: some browsers (WebKitGTK) read the blob after click() returns.
+  setTimeout(() => URL.revokeObjectURL(a.href), 60000);
 }
 
 function init() {

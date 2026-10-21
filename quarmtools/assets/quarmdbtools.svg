@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#6366f1"/>
+      <stop offset="1" stop-color="#3730a3"/>
+    </linearGradient>
+    <linearGradient id="gem" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fde68a"/>
+      <stop offset="1" stop-color="#f59e0b"/>
+    </linearGradient>
+  </defs>
+  <rect x="8" y="8" width="112" height="112" rx="26" fill="url(#bg)"/>
+  <!-- database: three stacked disks -->
+  <g fill="none" stroke="#ffffff" stroke-width="6" stroke-linecap="round">
+    <ellipse cx="56" cy="38" rx="26" ry="9" fill="#ffffff" fill-opacity=".18"/>
+    <path d="M30 38v44c0 5 11.6 9 26 9s26-4 26-9V38"/>
+    <path d="M30 60c0 5 11.6 9 26 9s26-4 26-9"/>
+  </g>
+  <!-- spell gem -->
+  <path d="M92 66l12 14-12 24-12-24z" fill="url(#gem)" stroke="#ffffff" stroke-width="4" stroke-linejoin="round"/>
+</svg>

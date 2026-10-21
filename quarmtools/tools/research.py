@@ -549,7 +549,8 @@ def render_html(data, nav=""):
     """The page for data; nav is HTML put before the title (the front end's home link)."""
     template = TEMPLATE.read_text(encoding="utf-8")
     payload = json.dumps(data, separators=(",", ":")).replace("</", "<\\/")
-    return template.replace("/*DATA*/null", payload).replace("<!--NAV-->", nav)
+    return (template.replace("/*THEME*/", web.THEME_CSS).replace("/*DATA*/null", payload)
+            .replace("<!--NAV-->", nav))
 
 
 def write_html(data, path):

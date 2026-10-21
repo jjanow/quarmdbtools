@@ -12,32 +12,54 @@ repository. This repo converts the **most recent** dump into a local SQLite data
 - `bash`, `curl`, `jq`, `tar`, `git`
 - Python 3.8+ (standard library only), with an SQLite that includes FTS5 (standard in python.org and
   most distro builds)
+- For the desktop app: GTK 3 and WebKitGTK with their Python bindings (on Debian/Ubuntu,
+  `python3-gi gir1.2-gtk-3.0 gir1.2-webkit2-4.1`; usually already installed on a GNOME desktop).
+  Without them, `./quarm` falls back to the browser version.
 
 ## Usage
 
 Everything runs through `./quarm` at the repo root:
 
 ```sh
-./quarm                  # start the front end and open it in your browser
-./quarm --no-browser     # same, without opening a browser (or: ./quarm serve --port N)
+./quarm                  # open the desktop app
+./quarm app --install    # add it to your application menu (--uninstall removes it)
+./quarm serve            # the same pages in your browser instead (--port N, --no-browser)
 ./quarm -h               # list the tools
 ./quarm fetch            # download and convert the latest database dump
 ./quarm research         # write the research needs page and CSV to data/
 ./quarm schema-ref       # regenerate docs/schema_reference.md
 ```
 
-The front end is a small local web server (standard library only, listening on 127.0.0.1:8642, or
-any free port if that one is taken). Its home page shows the database version and links to each
-tool's page. Tool pages are rebuilt every time you load them, so reloading picks up a new database
-or fresh Zeal exports. Stop it with Ctrl-C.
+The front end is a desktop app: one window whose home page shows the database version and links to
+each tool's page. It's a GTK window with an embedded WebKit view. Pages are built in the app's own
+process and handed to the view directly, so nothing listens on a port. Tool pages are rebuilt every
+time you load them, so Reload (Ctrl+R or F5) picks up a new database or fresh Zeal exports.
+
+- **Back, forward, home and reload** are in the header bar (also Alt+Left, Alt+Right, Alt+Home).
+- **Light or dark:** the menu (☰) has Appearance: System (follows the GNOME dark style setting, live),
+  Light or Dark. The choice and the window size are saved in `~/.config/quarmdbtools/desktop.json`.
+- **Links** to other sites (PQDI) open in your default browser. **Download CSV** asks where to save.
+- **Open in Browser** in the menu shows the current page in your browser, through the web server.
+- Pages remember their own settings (e.g. the research page's filters) under
+  `~/.local/share/quarmdbtools/`.
+- `./quarm app --install` adds Quarm DB Tools to your application menu and dock with its own icon,
+  pointing at this checkout; run it again if you move the repo. Launching it while it's open brings
+  the open window forward.
+
+`./quarm serve` is the same front end as a small local web server (standard library only, listening on
+127.0.0.1:8642, or any free port if that one is taken), for use without a display or in a real
+browser. Stop it with Ctrl-C.
 
 ### Adding a tool
 
 Each tool is a module in `quarmtools/tools/`, found automatically. It defines `NAME` (the
 subcommand), `SUMMARY` (one line for `-h` and the home page), `add_arguments(parser)` and
 `run(args)`. To get a page in the front end, also define `page(params)`, which returns HTML and is
-served at `/<NAME>`. `quarmtools/common.py` has the database path (`QUARM_DATA_DIR` aware) and a
-read-only connection helper; `quarmtools/web.py` has the shared page style. See
+shown at `/<NAME>`. `quarmtools/common.py` has the database path (`QUARM_DATA_DIR` aware) and a
+read-only connection helper. `quarmtools/web.py` has the shared page style and theme tokens: use the
+CSS variables in `THEME_CSS` (`--bg`, `--panel`, `--text`, `--accent`, ...) so the page follows the
+light/dark setting. `quarmtools/pages.py` routes paths to pages for both the desktop app
+(`quarmtools/desktop.py`) and the server (`quarmtools/server.py`). See
 `quarmtools/tools/__init__.py` for details.
 
 ## Getting the database

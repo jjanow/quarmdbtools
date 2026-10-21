@@ -1,64 +1,30 @@
-"""The front end: a local web server with a home page linking to each tool's page.
+"""The front end in a browser: a local web server for the pages in quarmtools/pages.py.
 
-Each tool with a page(params) function is served at /<NAME>, rebuilt on every request, so reloading
-the page picks up a new database or fresh Zeal exports. The server only listens on 127.0.0.1.
+The desktop app (quarmtools/desktop.py) is the default; this is for running without a display or in
+a real browser. Pages are rebuilt on every request, so reloading picks up a new database or fresh
+Zeal exports. The server only listens on 127.0.0.1.
 """
 import errno
 import sys
 import threading
-import traceback
 import urllib.parse
 import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
-from quarmtools import common, tools, web
+from quarmtools import pages, tools
 
 DEFAULT_PORT = 8642
 
 
-def home_page(tool_list):
-    db = common.db_info()
-    if db["exists"]:
-        status = (f'<p class="muted">Database: dump <b>{web.esc(db["source_version"] or "?")}</b>, '
-                  f'converted {web.esc(db["converted_at"] or "?")}. '
-                  f'Check for a newer one with <code>./quarm fetch --check</code>.</p>')
-    else:
-        status = (f'<p class="warn">No database at {web.esc(db["path"])}. '
-                  f'Run <code>./quarm fetch</code> to download and convert the latest dump.</p>')
-    cards = []
-    for t in tool_list:
-        name, summary = web.esc(t.NAME), web.esc(t.SUMMARY)
-        if hasattr(t, "page"):
-            cards.append(f'<a class="card" href="/{name}"><h2>{name}</h2><p>{summary}</p>'
-                         f'<p class="cli">also <code>./quarm {name}</code></p></a>')
-        else:
-            cards.append(f'<div class="card"><h2>{name}</h2><p>{summary}</p>'
-                         f'<p class="cli">command line only: <code>./quarm {name}</code></p></div>')
-    body = "<h1>Quarm DB Tools</h1>\n" + status + '\n<div class="cards">\n' + "\n".join(cards) + "\n</div>"
-    return web.page("Quarm DB Tools", body, nav=False)
-
-
 def make_handler(tool_list):
-    pages = {t.NAME: t for t in tool_list if hasattr(t, "page")}
-
     class Handler(BaseHTTPRequestHandler):
         def do_GET(self):
             url = urllib.parse.urlsplit(self.path)
-            name = url.path.strip("/")
-            params = dict(urllib.parse.parse_qsl(url.query))
-            if name == "":
-                self.send_html(200, home_page(tool_list))
-            elif name in pages:
-                try:
-                    self.send_html(200, pages[name].page(params))
-                except Exception as e:  # show the error in the browser rather than dropping the connection
-                    traceback.print_exc()
-                    self.send_html(500, web.error_page(name, f"{type(e).__name__}: {e}"))
-            elif name == "favicon.ico":
+            if url.path == "/favicon.ico":
                 self.send_response(204)
                 self.end_headers()
-            else:
-                self.send_html(404, web.error_page("Not found", f"no tool page at /{name}"))
+                return
+            self.send_html(*pages.route(url.path, dict(urllib.parse.parse_qsl(url.query)), tool_list))
 
         def send_html(self, status, text):
             body = text.encode("utf-8")

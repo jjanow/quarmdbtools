@@ -22,3 +22,5 @@
 - [ ] Spell lookup and which NPCs cast a spell.
 - [ ] Output formats: CLI tables, plus CSV/JSON export.
 - [x] Pick an implementation language and set up the project skeleton: stdlib Python, `./quarm` entry point with tool modules in `quarmtools/tools/` and a local web front end. (Lint not set up.)
+- [x] Desktop app front end (GTK + WebKitGTK, no server), with light/dark themes and an app-menu launcher (`./quarm app --install`).
+- [ ] Run `fetch` from the desktop app (a button with progress) instead of only the command line.
