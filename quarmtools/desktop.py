@@ -268,6 +268,9 @@ def run():
             update_nav()
             if event == WebKit2.LoadEvent.FINISHED:
                 spinner.stop()
+                # The page's first frame can arrive while the spinner is animating and get dropped,
+                # leaving the view blank until something (a hover) repaints it; redraw once loaded.
+                view.queue_draw()
             else:
                 spinner.start()
 
