@@ -1,0 +1,316 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Research Needs</title>
+<!-- Template for scripts/research_needs.py, which replaces the DATA placeholder below. -->
+<style>
+:root {
+  --bg: #f7f7f5; --panel: #ffffff; --text: #1d1d1b; --muted: #6b6b66; --border: #dcdcd6;
+  --accent: #3b5bdb; --row-alt: #f1f1ec; --done: #9a9a94; --warn: #b35c00; --ok: #2b8a3e; --dup: #7048e8;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #161615; --panel: #1f1f1d; --text: #e8e8e3; --muted: #9a9a94; --border: #34342f;
+    --accent: #8ea2ff; --row-alt: #252522; --done: #6b6b66; --warn: #ffa94d; --ok: #69db7c; --dup: #b197fc;
+  }
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 system-ui, sans-serif; }
+header, main { max-width: 1400px; margin: 0 auto; padding: 16px; }
+header { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: end; }
+h1 { font-size: 20px; margin: 0 24px 0 0; }
+label { display: flex; flex-direction: column; gap: 2px; font-size: 12px; color: var(--muted); }
+select, input[type=number], input[type=search] {
+  font: inherit; color: var(--text); background: var(--panel); border: 1px solid var(--border);
+  border-radius: 6px; padding: 5px 8px;
+}
+input[type=number] { width: 5em; }
+.check { flex-direction: row; align-items: center; gap: 6px; font-size: 13px; color: var(--text); }
+.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 12px; }
+.tabs button {
+  font: inherit; background: none; border: 0; border-bottom: 2px solid transparent; color: var(--muted);
+  padding: 8px 12px; cursor: pointer;
+}
+.tabs button[aria-selected=true] { color: var(--text); border-bottom-color: var(--accent); font-weight: 600; }
+.bar { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: end; margin-bottom: 10px; }
+.summary { color: var(--muted); margin: 0 0 10px; }
+.summary b { color: var(--text); }
+button.csv {
+  font: inherit; margin-left: auto; padding: 5px 12px; border-radius: 6px; cursor: pointer;
+  border: 1px solid var(--border); background: var(--panel); color: var(--text);
+}
+.wrap { overflow-x: auto; background: var(--panel); border: 1px solid var(--border); border-radius: 8px; }
+table { border-collapse: collapse; width: 100%; }
+th, td { padding: 6px 10px; text-align: left; vertical-align: top; border-bottom: 1px solid var(--border); }
+th { position: sticky; top: 0; background: var(--panel); cursor: pointer; user-select: none; white-space: nowrap; font-size: 12px; }
+th.num, td.num { text-align: right; }
+th[aria-sort=ascending]::after { content: " ▲"; }
+th[aria-sort=descending]::after { content: " ▼"; }
+tbody tr:nth-child(even) { background: var(--row-alt); }
+tr.done td { color: var(--done); }
+tr.done a { color: var(--done); }
+tr.above td:first-child::after { content: " (above level)"; color: var(--muted); font-size: 12px; }
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+.need { color: var(--warn); font-weight: 600; }
+.ok { color: var(--ok); }
+.dup { color: var(--dup); }
+.small { font-size: 12px; color: var(--muted); }
+ul.plain { margin: 0; padding: 0; list-style: none; }
+footer { color: var(--muted); font-size: 12px; margin-top: 12px; }
+.buy { color: var(--accent); font-weight: 600; }
+.route { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; margin: 0 0 10px; }
+details summary { cursor: pointer; color: var(--accent); }
+.route ol { margin: 4px 0 0; padding-left: 20px; }
+@media (max-width: 640px) { h1 { width: 100%; } button.csv { margin-left: 0; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>Research Needs</h1>
+  <label>Character <select id="char"></select></label>
+  <label>Level <input id="level" type="number" min="1" max="65"></label>
+  <span id="classinfo" class="small"></span>
+</header>
+<main>
+  <div class="tabs" role="tablist">
+    <button role="tab" data-tab="words" aria-selected="true">Words &amp; pages</button>
+    <button role="tab" data-tab="spells" aria-selected="false">Spells</button>
+  </div>
+  <div class="bar">
+    <label>Search <input id="search" type="search" placeholder="word or spell"></label>
+    <label id="typewrap">Type <select id="type"><option value="">All</option><option>Word</option><option>Rune</option><option>Page</option><option>Scroll</option><option>Other</option></select></label>
+    <label class="check"><input id="hideabove" type="checkbox"> Hide spells above my level</label>
+    <label class="check" id="needwrap"><input id="onlyneed" type="checkbox"> Only words still to get</label>
+    <label class="check" id="buywrap"><input id="countbuy" type="checkbox"> Count words for spells I can buy</label>
+    <label class="check" id="scrollwrap"><input id="hidescroll" type="checkbox"> Hide spells with scroll owned</label>
+    <button class="csv" id="csv">Download CSV (current view)</button>
+  </div>
+  <p class="summary" id="summary"></p>
+  <div class="route" id="route" hidden></div>
+  <div class="wrap"><table id="table"><thead></thead><tbody></tbody></table></div>
+  <footer id="footer"></footer>
+</main>
+<script>
+const DATA = /*DATA*/null;
+const $ = id => document.getElementById(id);
+const store = {
+  get(k) { try { return localStorage.getItem("rn." + k); } catch (e) { return null; } },
+  set(k, v) { try { localStorage.setItem("rn." + k, v); } catch (e) {} },
+};
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
+const itemUrl = id => `https://www.pqdi.cc/item/${id}`;
+const spellUrl = id => `https://www.pqdi.cc/spell/${id}`;
+const item = id => DATA.items[id] || {name: `item ${id}`, type: "Other", twins: []};
+// Pages whose two halves share a name get their item id appended so they can be told apart.
+const itemLabel = id => item(id).name + (item(id).twins.length ? ` #${id}` : "");
+const spellName = id => DATA.spell_names[id] || `spell ${id}`;
+const pp = copper => copper >= 1000 ? `${+(copper / 1000).toFixed(1)}pp` : `${copper}cp`;
+// One line per zone: "Zone (merchant, merchant)", with the cheapest base price.
+function vendorList(vendors) {
+  const byZone = new Map();
+  for (const v of vendors) {
+    const z = byZone.get(v.zone_name) || {npcs: new Set(), price: Infinity};
+    z.npcs.add(v.npc); z.price = Math.min(z.price, v.price); byZone.set(v.zone_name, z);
+  }
+  // Plane of Knowledge first: it's the hub most characters will shop from.
+  return [...byZone].map(([zone, z]) => ({zone, npcs: [...z.npcs], price: z.price}))
+    .sort((a, b) => (b.zone === "Plane of Knowledge") - (a.zone === "Plane of Knowledge") || a.zone.localeCompare(b.zone));
+}
+function vendorHtml(vendors) {
+  const li = z => `<li><b>${esc(z.zone)}</b> ${esc(z.npcs.join(", "))} · ${pp(z.price)}</li>`;
+  const zones = vendorList(vendors), shown = zones.slice(0, 2), rest = zones.slice(2);
+  return `<ul class="plain small">${shown.map(li).join("")}</ul>` + (rest.length ?
+    `<details class="small"><summary>+${rest.length} more zone${rest.length > 1 ? "s" : ""}</summary><ul class="plain">${rest.map(li).join("")}</ul></details>` : "");
+}
+const vendorText = vendors => vendorList(vendors).map(z => `${z.zone} (${z.npcs.join(", ")}) ${pp(z.price)}`).join("; ");
+
+let tab = store.get("tab") || "words";
+let sort = {words: {key: "min_level", dir: 1}, spells: {key: "level", dir: 1}};
+
+const COLUMNS = {
+  words: [
+    {key: "name", label: "Word / page", html: r => `<a href="${itemUrl(r.item_id)}" target="_blank" rel="noopener">${esc(r.name)}</a>`},
+    {key: "type", label: "Type"},
+    {key: "needed", label: "Needed", num: true},
+    {key: "owned", label: "Owned", num: true, html: r => r.owned ? `<span class="ok">${r.owned}</span>` : "0"},
+    {key: "still_need", label: "Still need", num: true, html: r => r.still_need ? `<span class="need">${r.still_need}</span>` : "0"},
+    {key: "spell_count", label: "Spells", num: true},
+    {key: "used_by", label: "Used by", html: r => `<ul class="plain">${r.spells.map(s =>
+      `<li><a href="${spellUrl(s.spell_id)}" target="_blank" rel="noopener">${esc(spellName(s.spell_id))}</a>` +
+      `${s.count > 1 ? ` <span class="dup">×${s.count}</span>` : ""} <span class="small">L${s.level ?? "?"}</span>` +
+      `${s.buyable ? ` <span class="buy small">buyable</span>` : ""}</li>`).join("")}</ul>`},
+    {key: "min_level", label: "Min level", num: true},
+    {key: "duplicate", label: "Duplicate", html: r => `<span class="dup">${esc(r.duplicate)}</span>`},
+    {key: "owned_where", label: "Owned where", html: r => `<span class="small">${r.where.map(esc).join("<br>")}</span>`},
+    {key: "sold_by", label: "Sold by", html: r => vendorHtml(r.vendors)},
+  ],
+  spells: [
+    {key: "name", label: "Spell", html: r => `<a href="${spellUrl(r.spell_id)}" target="_blank" rel="noopener">${esc(r.name)}</a>`},
+    {key: "level", label: "Level", num: true},
+    {key: "status", label: "Status", html: r => `<span class="${r.status.startsWith("ready") ? "ok" : r.status === "missing words" ? "need" : r.status === "buy" ? "buy" : ""}">${esc(r.status)}</span>`},
+    {key: "missing_count", label: "Words to get", num: true},
+    {key: "vendors_text", label: "Sold by", html: r => vendorHtml(r.vendors)},
+    {key: "components_text", label: "Components (owned / needed)", html: r => `<ul class="plain">${r.components.map(c =>
+      `<li><a href="${itemUrl(c.item_id)}" target="_blank" rel="noopener">${esc(itemLabel(c.item_id))}</a> ` +
+      `<span class="${c.owned >= c.needed ? "ok" : "need"}">${c.owned}/${c.needed}</span></li>`).join("")}</ul>`},
+    {key: "alternatives_text", label: "Alternative recipe", html: r => r.alternatives.map(a => `<ul class="plain small">${a.components.map(c =>
+      `<li><a href="${itemUrl(c.item_id)}" target="_blank" rel="noopener">${esc(itemLabel(c.item_id))}</a>${c.needed > 1 ? ` ×${c.needed}` : ""}</li>`).join("")}</ul>`).join("<hr>")},
+  ],
+};
+
+function character() {
+  return DATA.characters.find(c => c.key === $("char").value) || DATA.characters[0];
+}
+
+function level() { return Number($("level").value) || 60; }
+
+// Word rows, recomputed so the "hide above level" filter also drops those spells' words from the counts.
+function wordRows(ch) {
+  const lvl = level(), hide = $("hideabove").checked, countBuy = $("countbuy").checked;
+  const spellLevel = Object.fromEntries(ch.spells.map(s => [s.spell_id, s.level]));
+  const neededIds = new Set(ch.words.map(w => w.item_id));
+  return ch.words.map(w => {
+    const spells = w.spells.map(s => ({...s, level: spellLevel[s.spell_id]}))
+      .filter(s => (!hide || s.level == null || s.level <= lvl) && (countBuy || !s.buyable));
+    const needed = spells.reduce((n, s) => n + s.count, 0);
+    const levels = spells.map(s => s.level).filter(l => l != null);
+    const dup = [];
+    if (spells.length > 1) dup.push(`used by ${spells.length} spells`);
+    if (spells.some(s => s.count > 1)) dup.push("multiple per recipe");
+    if (w.owned > needed) dup.push(`${w.owned - needed} spare`);
+    const it = item(w.item_id);
+    if (it.twins.length) dup.push("same name as " + it.twins.map(t => `#${t}` + (neededIds.has(t) ? "" : " (not needed)")).join(", ") + ": a different item");
+    return {
+      item_id: w.item_id, name: itemLabel(w.item_id), type: it.type, needed, owned: w.owned,
+      still_need: Math.max(0, needed - w.owned), spells, spell_count: spells.length,
+      used_by: spells.map(s => spellName(s.spell_id)).join("; "),
+      min_level: levels.length ? Math.min(...levels) : null, duplicate: dup.join("; "),
+      where: DATA.owned_where[w.item_id] || [], owned_where: (DATA.owned_where[w.item_id] || []).join("; "),
+      vendors: it.vendors || [], sold_by: vendorText(it.vendors || []),
+      done: needed - w.owned <= 0, above: levels.length && Math.min(...levels) > lvl,
+    };
+  }).filter(r => r.needed > 0);
+}
+
+function spellRows(ch) {
+  const lvl = level();
+  return ch.spells.map(s => ({
+    ...s,
+    vendors_text: vendorText(s.vendors),
+    missing_count: s.status === "scroll owned" || s.status === "buy" ? 0 : s.components.reduce((n, c) => n + Math.max(0, c.needed - c.owned), 0),
+    components_text: s.components.map(c => `${itemLabel(c.item_id)} ${c.owned}/${c.needed}`).join("; "),
+    alternatives_text: s.alternatives.map(a => a.components.map(c => itemLabel(c.item_id) + (c.needed > 1 ? ` x${c.needed}` : "")).join(" + ")).join(" | "),
+    done: s.status === "scroll owned" || s.status.startsWith("ready"), above: s.level != null && s.level > lvl,
+  }));
+}
+
+function filtered() {
+  const ch = character(), q = $("search").value.trim().toLowerCase();
+  let rows;
+  if (tab === "words") {
+    rows = wordRows(ch);
+    const type = $("type").value;
+    if (type) rows = rows.filter(r => r.type === type);
+    if ($("onlyneed").checked) rows = rows.filter(r => r.still_need > 0);
+    if (q) rows = rows.filter(r => r.name.toLowerCase().includes(q) || r.used_by.toLowerCase().includes(q));
+  } else {
+    rows = spellRows(ch);
+    if ($("hideabove").checked) rows = rows.filter(r => !r.above);
+    if ($("hidescroll").checked) rows = rows.filter(r => r.status !== "scroll owned");
+    if (q) rows = rows.filter(r => r.name.toLowerCase().includes(q) || r.components_text.toLowerCase().includes(q));
+  }
+  const {key, dir} = sort[tab];
+  const val = r => r[key];
+  rows.sort((a, b) => {
+    const x = val(a), y = val(b);
+    if (x == null || x === "") return y == null || y === "" ? 0 : 1;
+    if (y == null || y === "") return -1;
+    const c = typeof x === "number" && typeof y === "number" ? x - y : String(x).localeCompare(String(y), undefined, {numeric: true});
+    return c * dir || a.name.localeCompare(b.name);
+  });
+  return rows;
+}
+
+function render() {
+  const ch = character(), cols = COLUMNS[tab], rows = filtered();
+  document.querySelectorAll(".tabs button").forEach(b => b.setAttribute("aria-selected", b.dataset.tab === tab));
+  $("typewrap").hidden = $("needwrap").hidden = $("buywrap").hidden = tab !== "words";
+  $("scrollwrap").hidden = tab !== "spells";
+  $("classinfo").textContent = DATA.classes[ch.class_id] + (ch.new ? " (no spellbook: every research spell counts)" : "");
+
+  const thead = $("table").tHead, tbody = $("table").tBodies[0];
+  thead.innerHTML = "<tr>" + cols.map(c => `<th data-key="${c.key}" class="${c.num ? "num" : ""}"` +
+    (sort[tab].key === c.key ? ` aria-sort="${sort[tab].dir > 0 ? "ascending" : "descending"}"` : "") + `>${esc(c.label)}</th>`).join("") + "</tr>";
+  tbody.innerHTML = rows.map(r => `<tr class="${r.done ? "done" : ""} ${r.above ? "above" : ""}">` +
+    cols.map(c => `<td class="${c.num ? "num" : ""}">${c.html ? c.html(r) : esc(r[c.key])}</td>`).join("") + "</tr>").join("")
+    || `<tr><td colspan="${cols.length}">Nothing to show.</td></tr>`;
+
+  const words = wordRows(ch), spells = spellRows(ch).filter(s => !$("hideabove").checked || !s.above);
+  const still = words.reduce((n, w) => n + w.still_need, 0);
+  $("summary").innerHTML = `<b>${spells.length}</b> research spells not in the spellbook ` +
+    `(<b>${spells.filter(s => s.status.startsWith("ready")).length}</b> ready to research, ` +
+    `<b>${spells.filter(s => s.status === "scroll owned").length}</b> with the scroll already owned, ` +
+    `<b>${spells.filter(s => s.status === "buy").length}</b> sold by merchants). ` +
+    `<b>${still}</b> words/pages still to get across <b>${words.filter(w => w.still_need).length}</b> distinct items. ` +
+    `Showing ${rows.length} rows.`;
+  const route = ch.shopping.map(r => ({...r, spells: r.spells.filter(id => {
+    const sp = ch.spells.find(s => s.spell_id === id);
+    return !$("hideabove").checked || sp.level == null || sp.level <= level();
+  })})).filter(r => r.spells.length);
+  $("route").hidden = tab !== "spells" || !route.length;
+  $("route").innerHTML = `<b>Shopping route</b> <span class="small">(fewest zones that sell every buyable spell)</span><ol>` +
+    route.map(r => `<li><b>${esc(r.zone_name)}</b>: ${r.spells.map(id => esc(spellName(id))).join(", ")}</li>`).join("") + "</ol>";
+}
+
+function toCsv() {
+  const cols = COLUMNS[tab], rows = filtered();
+  const cell = v => { const s = String(v ?? ""); return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
+  const header = cols.map(c => c.label).concat(["PQDI"]);
+  const lines = [header.map(cell).join(",")].concat(rows.map(r => cols.map(c => cell(r[c.key]))
+    .concat([tab === "words" ? itemUrl(r.item_id) : spellUrl(r.spell_id)]).map(cell).join(",")));
+  const blob = new Blob([lines.join("\r\n") + "\r\n"], {type: "text/csv"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `research-${tab}-${character().name.replace(/\W+/g, "_")}.csv`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+function init() {
+  const sel = $("char");
+  const real = DATA.characters.filter(c => !c.new), fresh = DATA.characters.filter(c => c.new);
+  const group = (label, list) => `<optgroup label="${label}">` + list.map(c =>
+    `<option value="${esc(c.key)}">${esc(c.name)}${c.new ? "" : ` (${esc(DATA.classes[c.class_id])} ${c.level})`}</option>`).join("") + "</optgroup>";
+  sel.innerHTML = (real.length ? group("Characters", real) : "") + group("New character", fresh);
+  const saved = store.get("char");
+  if (saved && DATA.characters.some(c => c.key === saved)) sel.value = saved;
+  const setLevel = () => { $("level").value = store.get("level." + sel.value) || character().level; };
+  setLevel();
+  sel.addEventListener("change", () => { store.set("char", sel.value); setLevel(); render(); });
+  $("level").addEventListener("input", () => { store.set("level." + sel.value, $("level").value); render(); });
+  ["search", "type", "hideabove", "onlyneed", "hidescroll", "countbuy"].forEach(id => $(id).addEventListener("input", render));
+  document.querySelectorAll(".tabs button").forEach(b => b.addEventListener("click", () => { tab = b.dataset.tab; store.set("tab", tab); render(); }));
+  $("table").tHead.addEventListener("click", e => {
+    const th = e.target.closest("th");
+    if (!th) return;
+    const s = sort[tab];
+    if (s.key === th.dataset.key) s.dir = -s.dir; else { s.key = th.dataset.key; s.dir = 1; }
+    render();
+  });
+  $("csv").addEventListener("click", toCsv);
+  const exports = Object.entries(DATA.exports).map(([n, t]) => `${n} ${new Date(t * 1000).toLocaleString()}`).join(", ");
+  $("footer").innerHTML = `Owned counts include every character's bags and bank, plus the shared bank once. ` +
+    `Inventory exports: ${esc(exports) || "none"}. Database dump ${esc(DATA.db_version)}; ` +
+    `merchants as of expansion ${DATA.era} (${DATA.era >= 4 ? "Planes of Power, Plane of Knowledge included" : "pre-PoP"}). ` +
+    `Prices are base prices; merchants charge more or less by charisma and faction.` +
+    (DATA.skipped.length ? ` Skipped (class has no research spells): ${esc(DATA.skipped.join(", "))}.` : "");
+  render();
+}
+init();
+</script>
+</body>
+</html>

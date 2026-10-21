@@ -14,6 +14,7 @@
 - [x] Generate a schema reference (table/column list) automatically from the dump: `scripts/gen_schema_ref.py` → `docs/schema_reference.md`.
 
 ## Analysis tools (ideas)
+- [x] Research needs: words/pages each character still needs for spell research (`scripts/research_needs.py`).
 - [ ] Item lookup: stats, which NPCs drop it (with drop chance), where those NPCs spawn, and merchants that sell it.
 - [ ] NPC lookup: spawn locations, spawn chance in each spawngroup, respawn timers, loot table, and faction hits.
 - [ ] Zone summaries: NPC list, notable drops, and level ranges.
