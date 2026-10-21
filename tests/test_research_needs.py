@@ -1,4 +1,4 @@
-"""Tests for scripts/research_needs.py: recipe loading and dedupe, owned-item merging and the needs view.
+"""Tests for quarmtools/tools/research.py: recipe loading and dedupe, owned-item merging and the needs view.
 
 Run from the repo root: python3 -m unittest discover tests
 """
@@ -8,10 +8,9 @@ import tempfile
 import unittest
 from pathlib import Path
 
-SCRIPT = Path(__file__).resolve().parent.parent / "scripts" / "research_needs.py"
-sys.path.insert(0, str(SCRIPT.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-import research_needs as rn  # noqa: E402
+from quarmtools.tools import research as rn  # noqa: E402
 
 ENC, NEC = 14, 11
 

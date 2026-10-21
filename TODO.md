@@ -14,11 +14,11 @@
 - [x] Generate a schema reference (table/column list) automatically from the dump: `scripts/gen_schema_ref.py` → `docs/schema_reference.md`.
 
 ## Analysis tools (ideas)
-- [x] Research needs: words/pages each character still needs for spell research (`scripts/research_needs.py`).
+- [x] Research needs: words/pages each character still needs for spell research (`./quarm research`).
 - [ ] Item lookup: stats, which NPCs drop it (with drop chance), where those NPCs spawn, and merchants that sell it.
 - [ ] NPC lookup: spawn locations, spawn chance in each spawngroup, respawn timers, loot table, and faction hits.
 - [ ] Zone summaries: NPC list, notable drops, and level ranges.
 - [ ] Effective drop-rate math across loottable multipliers, lootdrop probabilities, and spawn chances.
 - [ ] Spell lookup and which NPCs cast a spell.
 - [ ] Output formats: CLI tables, plus CSV/JSON export.
-- [ ] Pick an implementation language and set up the project skeleton (deps, lint, tests).
+- [x] Pick an implementation language and set up the project skeleton: stdlib Python, `./quarm` entry point with tool modules in `quarmtools/tools/` and a local web front end. (Lint not set up.)

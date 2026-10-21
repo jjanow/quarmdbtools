@@ -13,12 +13,39 @@ repository. This repo converts the **most recent** dump into a local SQLite data
 - Python 3.8+ (standard library only), with an SQLite that includes FTS5 (standard in python.org and
   most distro builds)
 
+## Usage
+
+Everything runs through `./quarm` at the repo root:
+
+```sh
+./quarm                  # start the front end and open it in your browser
+./quarm --no-browser     # same, without opening a browser (or: ./quarm serve --port N)
+./quarm -h               # list the tools
+./quarm fetch            # download and convert the latest database dump
+./quarm research         # write the research needs page and CSV to data/
+./quarm schema-ref       # regenerate docs/schema_reference.md
+```
+
+The front end is a small local web server (standard library only, listening on 127.0.0.1:8642, or
+any free port if that one is taken). Its home page shows the database version and links to each
+tool's page. Tool pages are rebuilt every time you load them, so reloading picks up a new database
+or fresh Zeal exports. Stop it with Ctrl-C.
+
+### Adding a tool
+
+Each tool is a module in `quarmtools/tools/`, found automatically. It defines `NAME` (the
+subcommand), `SUMMARY` (one line for `-h` and the home page), `add_arguments(parser)` and
+`run(args)`. To get a page in the front end, also define `page(params)`, which returns HTML and is
+served at `/<NAME>`. `quarmtools/common.py` has the database path (`QUARM_DATA_DIR` aware) and a
+read-only connection helper; `quarmtools/web.py` has the shared page style. See
+`quarmtools/tools/__init__.py` for details.
+
 ## Getting the database
 
 ```sh
-scripts/fetch_latest_db.sh          # fetch + convert the latest dump (no-op if already current)
-scripts/fetch_latest_db.sh --check  # report upstream vs local version; exit 1 if out of date
-scripts/fetch_latest_db.sh --force  # re-download and re-convert
+./quarm fetch            # fetch + convert the latest dump (no-op if already current)
+./quarm fetch --check    # report upstream vs local version; exit 1 if out of date
+./quarm fetch --force    # re-download and re-convert
 
 sqlite3 data/quarm.sqlite "select id, Name from items where Name = 'cloth cap'"
 ```
@@ -34,7 +61,8 @@ The script:
 5. Deletes the temp dir (tarball and extracted SQL). This happens even if a step fails, and a failed
    run leaves the existing database untouched.
 
-After fetching a new dump, run `scripts/gen_schema_ref.py` to refresh `docs/schema_reference.md`.
+`./quarm fetch` runs `scripts/fetch_latest_db.sh`, which you can also run directly with the same options.
+After fetching a new dump, run `./quarm schema-ref` to refresh `docs/schema_reference.md`.
 
 Set `GITHUB_TOKEN` to raise the API rate limit, or `QUARM_DATA_DIR` to keep the database outside `data/`.
 `data/` is gitignored.
@@ -82,15 +110,18 @@ aren't parsed as FTS5 syntax: `match '"kilva''s" flam*'`.
 
 ## Research needs
 
-`scripts/research_needs.py` lists the spell research words and pages a character still needs. It
-writes `data/research_needs.html`, a self-contained page you open in a browser, and
-`data/research_needs.csv`.
+The research tool (`quarmtools/tools/research.py`) lists the spell research words and pages a
+character still needs. Open it from the front end's home page (or go to `/research`, `/research?era=3`
+for merchants as before Planes of Power); it reads the Zeal exports each time you load it. From the
+command line it writes `data/research_needs.html`, a self-contained page, and `data/research_needs.csv`.
 
 ```sh
-scripts/research_needs.py                      # reads the Zeal exports in ~/Games/EQQuarm/drive_c/Quarm
-scripts/research_needs.py --eq-dir /path/to/EQ # or set QUARM_EQ_DIR
-scripts/research_needs.py --era 3              # merchants as before Planes of Power
+./quarm research                      # reads the Zeal exports in ~/Games/EQQuarm/drive_c/Quarm
+./quarm research --eq-dir /path/to/EQ # or set QUARM_EQ_DIR (the front end uses QUARM_EQ_DIR)
+./quarm research --era 3              # merchants as before Planes of Power
 ```
+
+`scripts/research_needs.py` still works and does the same as `./quarm research`.
 
 First, write fresh exports in game with Zeal: `/outputfile spellbook` and `/outputfile inventory` on
 each character. The page has:
@@ -139,7 +170,7 @@ classes.
 - [docs/schema_reference.md](docs/schema_reference.md): every table with its row count, columns
   (original MariaDB type, affinity, NOT NULL, default, NOCASE, primary key) and indexes. It is
   generated, so don't edit it by hand. Regenerate it after fetching a new dump with
-  `scripts/gen_schema_ref.py`. The output is deterministic, so `git diff` shows what changed between
+  `./quarm schema-ref`. The output is deterministic, so `git diff` shows what changed between
   dumps.
 - [docs/server_config.md](docs/server_config.md): which server rules (`rule_values`, `variables`)
   affect drop rates, XP and respawns, and a recommendation on exposing them in analysis.
@@ -158,7 +189,9 @@ Tests use only the standard library. They cover:
   table options, `_column_types`, errors, and an end-to-end conversion of a small dump;
 - the FTS5 name-search tables (`tests/test_fts.py`);
 - research needs (`tests/test_research_needs.py`): recipe classes and dedupe, shared-bank merging,
-  alternative recipes, owned scrolls and duplicate flags.
+  alternative recipes, owned scrolls and duplicate flags;
+- the `./quarm` entry point (`tests/test_frontend.py`): tool discovery, serving by default, command
+  dispatch, the server's pages and error responses, and the research page's placeholders.
 
 ## Notes on the dump
 
