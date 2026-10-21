@@ -132,6 +132,14 @@ const vendorText = vendors => vendorList(vendors).map(z => `${z.zone} (${z.npcs.
 let tab = store.get("tab") || "words";
 let sort = {words: {key: "min_level", dir: 1}, spells: {key: "level", dir: 1}};
 
+// The "All characters" view adds these after the column named in "after".
+const ALL_COLUMNS = {
+  words: {after: "still_need", col: {key: "needed_by", label: "Needed by", html: r => `<ul class="plain">${r.chars.map(c =>
+    `<li>${esc(c.name)}${c.needed > 1 ? ` <span class="small">×${c.needed}</span>` : ""}</li>`).join("")}</ul>`}},
+  spells: {after: "name", col: {key: "character", label: "Character"}},
+};
+const DEFAULT_SORT = {words: "min_level", spells: "level"};
+
 const COLUMNS = {
   words: [
     {key: "name", label: "Word / page", html: r => `<a href="${itemUrl(r.item_id)}" target="_blank" rel="noopener">${esc(r.name)}</a>`},
@@ -142,7 +150,7 @@ const COLUMNS = {
     {key: "spell_count", label: "Spells", num: true},
     {key: "used_by", label: "Used by", html: r => `<ul class="plain">${r.spells.map(s =>
       `<li><a href="${spellUrl(s.spell_id)}" target="_blank" rel="noopener">${esc(spellName(s.spell_id))}</a>` +
-      `${s.count > 1 ? ` <span class="dup">×${s.count}</span>` : ""} <span class="small">L${s.level ?? "?"}</span>` +
+      `${s.count > 1 ? ` <span class="dup">×${s.count}</span>` : ""} <span class="small">L${s.level ?? "?"}${s.char ? ` · ${esc(s.char)}` : ""}</span>` +
       `${s.buyable ? ` <span class="buy small">buyable</span>` : ""}</li>`).join("")}</ul>`},
     {key: "min_level", label: "Min level", num: true},
     {key: "duplicate", label: "Duplicate", html: r => `<span class="dup">${esc(r.duplicate)}</span>`},
@@ -163,15 +171,38 @@ const COLUMNS = {
   ],
 };
 
+const ALL = "all";
+const isAll = () => $("char").value === ALL;
+const realCharacters = () => DATA.characters.filter(c => !c.new);
+// A character's level as set on the page (remembered per character), else its own.
+const charLevel = c => Number(store.get("level." + c.key)) || c.level;
+
 function character() {
   return DATA.characters.find(c => c.key === $("char").value) || DATA.characters[0];
 }
 
 function level() { return Number($("level").value) || 60; }
 
+function columns() {
+  const cols = [...COLUMNS[tab]];
+  if (isAll()) cols.splice(cols.findIndex(c => c.key === ALL_COLUMNS[tab].after) + 1, 0, ALL_COLUMNS[tab].col);
+  return cols;
+}
+
+function duplicateNote(itemId, spells, needed, owned, neededIds, charCount = 1) {
+  const dup = [], spellCount = new Set(spells.map(s => s.spell_id)).size;
+  if (charCount > 1) dup.push(`needed by ${charCount} characters`);
+  if (spellCount > 1) dup.push(`used by ${spellCount} spells`);
+  if (spells.some(s => s.count > 1)) dup.push("multiple per recipe");
+  if (owned > needed) dup.push(`${owned - needed} spare`);
+  const it = item(itemId);
+  if (it.twins.length) dup.push("same name as " + it.twins.map(t => `#${t}` + (neededIds.has(t) ? "" : " (not needed)")).join(", ") + ": a different item");
+  return dup.join("; ");
+}
+
 // Word rows, recomputed so the "hide above level" filter also drops those spells' words from the counts.
-function wordRows(ch) {
-  const lvl = level(), hide = $("hideabove").checked, countBuy = $("countbuy").checked;
+function wordRows(ch, lvl = level()) {
+  const hide = $("hideabove").checked, countBuy = $("countbuy").checked;
   const spellLevel = Object.fromEntries(ch.spells.map(s => [s.spell_id, s.level]));
   const neededIds = new Set(ch.words.map(w => w.item_id));
   return ch.words.map(w => {
@@ -179,17 +210,13 @@ function wordRows(ch) {
       .filter(s => (!hide || s.level == null || s.level <= lvl) && (countBuy || !s.buyable));
     const needed = spells.reduce((n, s) => n + s.count, 0);
     const levels = spells.map(s => s.level).filter(l => l != null);
-    const dup = [];
-    if (spells.length > 1) dup.push(`used by ${spells.length} spells`);
-    if (spells.some(s => s.count > 1)) dup.push("multiple per recipe");
-    if (w.owned > needed) dup.push(`${w.owned - needed} spare`);
     const it = item(w.item_id);
-    if (it.twins.length) dup.push("same name as " + it.twins.map(t => `#${t}` + (neededIds.has(t) ? "" : " (not needed)")).join(", ") + ": a different item");
     return {
       item_id: w.item_id, name: itemLabel(w.item_id), type: it.type, needed, owned: w.owned,
       still_need: Math.max(0, needed - w.owned), spells, spell_count: spells.length,
       used_by: spells.map(s => spellName(s.spell_id)).join("; "),
-      min_level: levels.length ? Math.min(...levels) : null, duplicate: dup.join("; "),
+      min_level: levels.length ? Math.min(...levels) : null,
+      duplicate: duplicateNote(w.item_id, spells, needed, w.owned, neededIds),
       where: DATA.owned_where[w.item_id] || [], owned_where: (DATA.owned_where[w.item_id] || []).join("; "),
       vendors: it.vendors || [], sold_by: vendorText(it.vendors || []),
       done: needed - w.owned <= 0, above: levels.length && Math.min(...levels) > lvl,
@@ -197,8 +224,38 @@ function wordRows(ch) {
   }).filter(r => r.needed > 0);
 }
 
-function spellRows(ch) {
-  const lvl = level();
+// Every known character's word rows merged into one per item, each character at its own level.
+// Owned counts already cover every character, so they are taken once, not summed.
+function allWordRows() {
+  const merged = new Map(), neededIds = new Set();
+  for (const c of realCharacters()) {
+    c.words.forEach(w => neededIds.add(w.item_id));
+    for (const r of wordRows(c, charLevel(c))) {
+      const spells = r.spells.map(s => ({...s, char: c.name})), m = merged.get(r.item_id);
+      if (!m) {
+        merged.set(r.item_id, {...r, spells, chars: [{name: c.name, needed: r.needed}]});
+        continue;
+      }
+      m.needed += r.needed;
+      m.spells.push(...spells);
+      m.chars.push({name: c.name, needed: r.needed});
+      m.above = m.above && r.above;
+      if (r.min_level != null && (m.min_level == null || r.min_level < m.min_level)) m.min_level = r.min_level;
+    }
+  }
+  return [...merged.values()].map(m => ({
+    ...m, still_need: Math.max(0, m.needed - m.owned), spell_count: m.spells.length, done: m.needed <= m.owned,
+    used_by: m.spells.map(s => `${spellName(s.spell_id)} (${s.char})`).join("; "),
+    needed_by: m.chars.map(c => c.name + (c.needed > 1 ? ` x${c.needed}` : "")).join("; "),
+    duplicate: duplicateNote(m.item_id, m.spells, m.needed, m.owned, neededIds, m.chars.length),
+  }));
+}
+
+function allSpellRows() {
+  return realCharacters().flatMap(c => spellRows(c, charLevel(c)).map(s => ({...s, character: c.name})));
+}
+
+function spellRows(ch, lvl = level()) {
   return ch.spells.map(s => ({
     ...s,
     vendors_text: vendorText(s.vendors),
@@ -213,17 +270,20 @@ function filtered() {
   const ch = character(), q = $("search").value.trim().toLowerCase();
   let rows;
   if (tab === "words") {
-    rows = wordRows(ch);
+    rows = isAll() ? allWordRows() : wordRows(ch);
     const type = $("type").value;
     if (type) rows = rows.filter(r => r.type === type);
     if ($("onlyneed").checked) rows = rows.filter(r => r.still_need > 0);
     if (q) rows = rows.filter(r => r.name.toLowerCase().includes(q) || r.used_by.toLowerCase().includes(q));
   } else {
-    rows = spellRows(ch);
+    rows = isAll() ? allSpellRows() : spellRows(ch);
     if ($("hideabove").checked) rows = rows.filter(r => !r.above);
     if ($("hidescroll").checked) rows = rows.filter(r => r.status !== "scroll owned");
-    if (q) rows = rows.filter(r => r.name.toLowerCase().includes(q) || r.components_text.toLowerCase().includes(q));
+    if (q) rows = rows.filter(r => r.name.toLowerCase().includes(q) || r.components_text.toLowerCase().includes(q) ||
+      (r.character || "").toLowerCase().includes(q));
   }
+  // A column only the "All characters" view has may still be the sort key after leaving it.
+  if (!columns().some(c => c.key === sort[tab].key)) sort[tab] = {key: DEFAULT_SORT[tab], dir: 1};
   const {key, dir} = sort[tab];
   const val = r => r[key];
   rows.sort((a, b) => {
@@ -237,11 +297,13 @@ function filtered() {
 }
 
 function render() {
-  const ch = character(), cols = COLUMNS[tab], rows = filtered();
+  const ch = character(), all = isAll(), rows = filtered(), cols = columns();
   document.querySelectorAll(".tabs button").forEach(b => b.setAttribute("aria-selected", b.dataset.tab === tab));
   $("typewrap").hidden = $("needwrap").hidden = $("buywrap").hidden = tab !== "words";
   $("scrollwrap").hidden = tab !== "spells";
-  $("classinfo").textContent = DATA.classes[ch.class_id] + (ch.new ? " (no spellbook: every research spell counts)" : "");
+  $("level").disabled = all;
+  $("classinfo").textContent = all ? `${realCharacters().length} characters combined, each at its own level` :
+    DATA.classes[ch.class_id] + (ch.new ? " (no spellbook: every research spell counts)" : "");
 
   const thead = $("table").tHead, tbody = $("table").tBodies[0];
   thead.innerHTML = "<tr>" + cols.map(c => `<th data-key="${c.key}" class="${c.num ? "num" : ""}"` +
@@ -250,15 +312,16 @@ function render() {
     cols.map(c => `<td class="${c.num ? "num" : ""}">${c.html ? c.html(r) : esc(r[c.key])}</td>`).join("") + "</tr>").join("")
     || `<tr><td colspan="${cols.length}">Nothing to show.</td></tr>`;
 
-  const words = wordRows(ch), spells = spellRows(ch).filter(s => !$("hideabove").checked || !s.above);
+  const words = all ? allWordRows() : wordRows(ch);
+  const spells = (all ? allSpellRows() : spellRows(ch)).filter(s => !$("hideabove").checked || !s.above);
   const still = words.reduce((n, w) => n + w.still_need, 0);
-  $("summary").innerHTML = `<b>${spells.length}</b> research spells not in the spellbook ` +
+  $("summary").innerHTML = `<b>${spells.length}</b> research spells not in the spellbook${all ? "s" : ""} ` +
     `(<b>${spells.filter(s => s.status.startsWith("ready")).length}</b> ready to research, ` +
     `<b>${spells.filter(s => s.status === "scroll owned").length}</b> with the scroll already owned, ` +
     `<b>${spells.filter(s => s.status === "buy").length}</b> sold by merchants). ` +
     `<b>${still}</b> words/pages still to get across <b>${words.filter(w => w.still_need).length}</b> distinct items. ` +
     `Showing ${rows.length} rows.`;
-  const route = ch.shopping.map(r => ({...r, spells: r.spells.filter(id => {
+  const route = all ? [] : ch.shopping.map(r => ({...r, spells: r.spells.filter(id => {
     const sp = ch.spells.find(s => s.spell_id === id);
     return !$("hideabove").checked || sp.level == null || sp.level <= level();
   })})).filter(r => r.spells.length);
@@ -268,7 +331,7 @@ function render() {
 }
 
 function toCsv() {
-  const cols = COLUMNS[tab], rows = filtered();
+  const cols = columns(), rows = filtered();
   const cell = v => { const s = String(v ?? ""); return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
   const header = cols.map(c => c.label).concat(["PQDI"]);
   const lines = [header.map(cell).join(",")].concat(rows.map(r => cols.map(c => cell(r[c.key]))
@@ -276,7 +339,7 @@ function toCsv() {
   const blob = new Blob([lines.join("\r\n") + "\r\n"], {type: "text/csv"});
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
-  a.download = `research-${tab}-${character().name.replace(/\W+/g, "_")}.csv`;
+  a.download = `research-${tab}-${isAll() ? "all" : character().name.replace(/\W+/g, "_")}.csv`;
   a.click();
   URL.revokeObjectURL(a.href);
 }
@@ -286,10 +349,11 @@ function init() {
   const real = DATA.characters.filter(c => !c.new), fresh = DATA.characters.filter(c => c.new);
   const group = (label, list) => `<optgroup label="${label}">` + list.map(c =>
     `<option value="${esc(c.key)}">${esc(c.name)}${c.new ? "" : ` (${esc(DATA.classes[c.class_id])} ${c.level})`}</option>`).join("") + "</optgroup>";
-  sel.innerHTML = (real.length ? group("Characters", real) : "") + group("New character", fresh);
+  sel.innerHTML = (real.length ? `<option value="${ALL}">All characters (combined)</option>` + group("Characters", real) : "") +
+    group("New character", fresh);
   const saved = store.get("char");
-  if (saved && DATA.characters.some(c => c.key === saved)) sel.value = saved;
-  const setLevel = () => { $("level").value = store.get("level." + sel.value) || character().level; };
+  if (saved && (DATA.characters.some(c => c.key === saved) || saved === ALL && real.length)) sel.value = saved;
+  const setLevel = () => { $("level").value = isAll() ? "" : store.get("level." + sel.value) || character().level; };
   setLevel();
   sel.addEventListener("change", () => { store.set("char", sel.value); setLevel(); render(); });
   $("level").addEventListener("input", () => { store.set("level." + sel.value, $("level").value); render(); });

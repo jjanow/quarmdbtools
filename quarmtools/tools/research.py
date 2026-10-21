@@ -7,7 +7,8 @@ EverQuest directory (<Name>-Spellbook.txt and <Name>-Inventory.txt; write them i
 /outputfile spellbook and /outputfile inventory). The front end (./quarm) serves the page at
 /research, rebuilt on every load. From the command line it writes one self-contained HTML file with a
 character picker (every character with a spellbook export, plus "new character" entries for each
-research class) and a CSV with the same rows for every character.
+research class, plus "All characters" to merge every known character's needs into one list) and a
+CSV with the same rows for every character.
 
 How it decides what is needed:
 
