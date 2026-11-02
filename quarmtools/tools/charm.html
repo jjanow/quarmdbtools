@@ -1,0 +1,324 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Charm Targets</title>
+<!-- Template for quarmtools/tools/charm.py, which replaces the THEME, DATA and NAV placeholders below. -->
+<style>
+/*THEME*/
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body {
+  margin: 0; background: var(--bg); color: var(--text); font: 14px/1.5 var(--font); -webkit-font-smoothing: antialiased;
+  display: flex; flex-direction: column; height: 100vh;
+}
+header, main { width: 100%; max-width: 1500px; margin: 0 auto; padding: 20px 24px; }
+header { flex: none; display: flex; flex-wrap: wrap; gap: 12px 20px; align-items: end; padding-bottom: 8px; }
+main { padding-top: 8px; flex: 1; min-height: 0; display: flex; flex-direction: column; }
+main > * { flex: none; }
+h1 { font-size: 24px; font-weight: 650; letter-spacing: -0.01em; margin: 0 16px 0 0; }
+label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; font-weight: 500; color: var(--muted); }
+select, input[type=number], input[type=search] {
+  font: inherit; font-size: 14px; color: var(--text); background: var(--panel); border: 1px solid var(--border);
+  border-radius: 8px; padding: 6px 10px; box-shadow: var(--shadow); outline: none;
+  transition: border-color .15s, box-shadow .15s;
+}
+::placeholder { color: var(--muted); opacity: .7; }
+select:focus, input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+input[type=number] { width: 5.5em; }
+input[type=search] { min-width: 16em; }
+input[type=checkbox] { accent-color: var(--accent); width: 15px; height: 15px; margin: 0; }
+.check { flex-direction: row; align-items: center; gap: 7px; font-size: 13px; font-weight: 400; color: var(--text); padding-bottom: 7px; }
+.bar { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: end; margin-bottom: 12px; }
+.summary { color: var(--muted); margin: 0 0 12px; }
+.summary b { color: var(--text); }
+button.csv, button.more {
+  font: inherit; font-weight: 500; padding: 6px 14px; border-radius: 8px; cursor: pointer;
+  border: 1px solid var(--accent); background: var(--accent); color: var(--on-accent); box-shadow: var(--shadow);
+  transition: filter .15s;
+}
+button.csv { margin-left: auto; }
+button.more { background: var(--panel); color: var(--accent); margin: 10px auto; display: block; }
+button.csv:hover, button.more:hover { filter: brightness(1.08); }
+.wrap { flex: 1 1 auto; overflow: auto; min-height: 200px; background: var(--panel); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow); }
+table { border-collapse: collapse; width: 100%; }
+th, td { padding: 8px 10px; text-align: left; vertical-align: top; border-bottom: 1px solid var(--border); }
+th {
+  position: sticky; top: 0; z-index: 1; background: var(--panel-2); cursor: pointer; user-select: none; white-space: nowrap;
+  font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--muted);
+}
+th:hover { color: var(--text); }
+th.num, td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+th[aria-sort=ascending]::after { content: " ▲"; color: var(--accent); }
+th[aria-sort=descending]::after { content: " ▼"; color: var(--accent); }
+tbody tr:nth-child(even) { background: var(--row-alt); }
+tbody tr:hover { background: var(--hover); }
+tbody tr:last-child td { border-bottom: 0; }
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+a.home { color: var(--accent); text-decoration: none; align-self: center; font-size: 13px; }
+.small { font-size: 12px; color: var(--muted); }
+.hi { color: var(--ok); font-weight: 600; }
+.lo { color: var(--done); }
+.warn { color: var(--warn); }
+.score { font-weight: 650; }
+ul.plain { margin: 0; padding: 0; list-style: none; }
+.tag {
+  display: inline-block; font-size: 11px; line-height: 1.5; padding: 0 6px; margin: 0 3px 3px 0; border-radius: 999px;
+  background: var(--accent-soft); color: var(--accent); white-space: nowrap;
+}
+.tag.named { background: none; border: 1px solid var(--dup); color: var(--dup); }
+.tag.raid, .tag.bad { background: none; border: 1px solid var(--warn); color: var(--warn); }
+.dead { color: var(--done); text-decoration: line-through; }
+.spellinfo { background: var(--accent-soft); border: 1px solid var(--border); border-radius: 12px; padding: 8px 14px; margin: 0 0 12px; }
+details summary { cursor: pointer; color: var(--accent); }
+footer { color: var(--muted); font-size: 12px; margin-top: 14px; }
+@media (max-width: 640px) { h1 { width: 100%; } button.csv { margin-left: 0; } input[type=search] { min-width: 0; } }
+@media (max-height: 520px) { body { display: block; height: auto; } }
+</style>
+</head>
+<body>
+<header>
+  <!--NAV--><h1>Charm Targets</h1>
+  <label>Character <select id="char"></select></label>
+  <label>Level <input id="level" type="number" min="1" max="65"></label>
+  <label>Charm spell <select id="spell"></select></label>
+</header>
+<main>
+  <p class="spellinfo" id="spellinfo"></p>
+  <div class="bar">
+    <label>Search <input id="search" type="search" placeholder="NPC or zone"></label>
+    <label>Min level <input id="minlvl" type="number" min="1" max="65"></label>
+    <label>Max level <input id="maxlvl" type="number" min="1" max="65"></label>
+    <label class="check"><input id="named" type="checkbox"> Named only</label>
+    <label class="check"><input id="raid" type="checkbox"> Show raid targets</label>
+    <label class="check"><input id="nospawn" type="checkbox"> Show NPCs that never spawn</label>
+    <label class="check"><input id="live" type="checkbox"> <span id="livelabel">Only spawns live now</span></label>
+    <button class="csv" id="csv">Download CSV (current view)</button>
+  </div>
+  <p class="summary" id="summary"></p>
+  <div class="wrap" id="wrap"><table id="table"><thead></thead><tbody></tbody></table><button class="more" id="more" hidden></button></div>
+  <footer id="footer"></footer>
+</main>
+<script>
+const DATA = /*DATA*/null;
+const $ = id => document.getElementById(id);
+const store = {
+  get(k) { try { return localStorage.getItem("ct." + k); } catch (e) { return null; } },
+  set(k, v) { try { localStorage.setItem("ct." + k, v); } catch (e) {} },
+};
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
+const npcUrl = id => `https://www.pqdi.cc/npc/${id}`;
+const spellUrl = id => `https://www.pqdi.cc/spell/${id}`;
+const SPELLS = Object.fromEntries(DATA.spells.map(s => [s.id, s]));
+const EXPANSIONS = ["Classic", "Kunark", "Velious", "Luclin", "Planes of Power"];
+const PAGE = 300;
+let shown = PAGE;
+let sort = {key: "s", dir: -1};
+
+const fmt = (n, d = 0) => n == null ? "" : Number(n).toLocaleString(undefined, {maximumFractionDigits: d, minimumFractionDigits: d});
+const ratio = r => `<span class="${r >= 1.5 ? "hi" : r < 0.8 ? "lo" : ""}">${fmt(r, 2)}×</span>`;
+const duration = ticks => { const s = ticks * 6; return s >= 60 ? `${+(s / 60).toFixed(1)} min` : `${s}s`; };
+const respawn = s => !s ? "" : s >= 3600 ? `${+(s / 3600).toFixed(1)}h` : s >= 60 ? `${Math.round(s / 60)}m` : `${s}s`;
+
+// A zone entry is [short, long name, expansion, spawn points, best chance %, fastest respawn s, live in era].
+function zonesHtml(r) {
+  const li = z => `<li class="${z[6] ? "" : "dead"}" title="${z[6] ? "" : "not live in this era"}"><b>${esc(z[1])}</b> ` +
+    `<span class="small">${z[3] > 1 ? `${z[3]} spawns · ` : ""}${z[4] < 100 ? `${fmt(z[4], z[4] < 10 ? 1 : 0)}% chance · ` : ""}` +
+    `${respawn(z[5]) ? `respawn ${respawn(z[5])}` : ""}${z[2] != null ? ` · ${EXPANSIONS[z[2]] || "era " + z[2]}` : ""}</span></li>`;
+  const zs = zones(r), first = zs.slice(0, 2), rest = zs.slice(2);
+  if (!zs.length) return `<span class="small">no spawn point</span>`;
+  return `<ul class="plain">${first.map(li).join("")}</ul>` + (rest.length ?
+    `<details class="small"><summary>+${rest.length} more</summary><ul class="plain">${rest.map(li).join("")}</ul></details>` : "");
+}
+const zones = r => $("live").checked ? r.z.filter(z => z[6]) : r.z;
+
+const COLUMNS = [
+  {key: "n", label: "NPC", html: r => `<a href="${npcUrl(r.id)}" target="_blank" rel="noopener">${esc(r.n)}</a>` +
+    (r.named ? ` <span class="tag named">named</span>` : "") + (r.raid ? ` <span class="tag raid">raid</span>` : "") +
+    `<div class="small">${esc(DATA.npc_classes[r.c] || "class " + r.c)}${DATA.bodies[r.b] ? " · " + esc(DATA.bodies[r.b]) : ""}` +
+    `${r.ids.length ? ` · ${r.ids.length + 1} copies` : ""}</div>`, text: r => r.n},
+  {key: "l", label: "Level", num: true, html: r => r.ml > r.l ? `${r.l}–${r.ml}` + (r.ml > cap() ? ` <span class="warn small">some above cap</span>` : "") : r.l,
+    text: r => r.ml > r.l ? `${r.l}-${r.ml}` : r.l},
+  {key: "s", label: "Score", num: true, title: "Weighted geometric mean of the DPS, HP and AC ratios to a typical NPC of this level",
+    html: r => `<span class="score ${r.s >= 1.5 ? "hi" : r.s < 0.8 ? "lo" : ""}">${fmt(r.s, 2)}</span>`},
+  {key: "dps", label: "DPS", num: true, title: "Estimated melee damage per second as a charmed pet", html: r => fmt(r.dps, 1)},
+  {key: "rd", label: "DPS ×", num: true, title: "DPS ÷ median DPS of NPCs this level", html: r => ratio(r.rd)},
+  {key: "hp", label: "HP", num: true, html: r => fmt(r.hp)},
+  {key: "rh", label: "HP ×", num: true, html: r => ratio(r.rh)},
+  {key: "ac", label: "AC", num: true},
+  {key: "ra", label: "AC ×", num: true, html: r => ratio(r.ra)},
+  {key: "rg", label: "Regen", num: true, title: "HP regenerated per tick (6 seconds)", html: r => fmt(r.rg)},
+  {key: "hit", label: "Hit", num: true, title: "Min–max damage per hit", html: r => `${r.mn}–${r.mx}`, sortVal: r => (r.mn + r.mx) / 2, text: r => `${r.mn}-${r.mx}`},
+  {key: "dl", label: "Delay", num: true, title: "Seconds between attack rounds", html: r => fmt(r.dl / 10, 1), text: r => r.dl / 10},
+  {key: "h", label: "Hits/rnd", num: true, title: "Expected hits per round: attacks, double attack, dual wield", html: r => fmt(r.h, 2)},
+  {key: "mr", label: "MR", num: true, title: "Magic resist: higher means charm lands less and breaks more"},
+  {key: "margin", label: "Margin", num: true, title: "Levels below the charm spell's cap", sortVal: r => cap() - r.l, html: r => cap() - r.l, text: r => cap() - r.l},
+  {key: "t", label: "Abilities", html: r => r.t.map(t => `<span class="tag">${esc(t)}</span>`).join("") +
+    (r.cs ? `<span class="tag">casts spells</span>` : ""), text: r => r.t.concat(r.cs ? ["casts spells"] : []).join("; ")},
+  {key: "z", label: "Where", html: zonesHtml, text: r => zones(r).map(z => z[1]).join("; "), sortVal: r => (zones(r)[0] || [, "~"])[1]},
+];
+
+const character = () => DATA.characters.find(c => c.key === $("char").value) || DATA.characters[0];
+const level = () => Number($("level").value) || character().level;
+const spell = () => SPELLS[$("spell").value];
+const cap = () => (spell() || {cap: 0}).cap;
+
+// Charm spells this character's class gets: from the book for a real character, else any with a scroll.
+function classSpells(ch) {
+  return DATA.spells.filter(s => s.levels[ch.class_id] != null && (ch.known ? ch.known.includes(s.id) : s.scroll))
+    .sort((a, b) => a.levels[ch.class_id] - b.levels[ch.class_id]);
+}
+// Same rule as best_spell() in charm.py: highest cap, unresistable short charms only as a last resort.
+function bestSpell(ch, lvl) {
+  const usable = classSpells(ch).filter(s => ch.known || s.levels[ch.class_id] <= lvl);
+  const normal = usable.filter(s => s.resist_diff > -1000);
+  const pool = normal.length ? normal : usable;
+  return pool.reduce((best, s) => !best || s.cap > best.cap || s.cap === best.cap && s.levels[ch.class_id] > best.levels[ch.class_id] ? s : best, null);
+}
+
+function fillSpells(keepSaved) {
+  const ch = character(), lvl = level(), list = classSpells(ch);
+  const sel = $("spell");
+  sel.innerHTML = list.length ? list.map(s => `<option value="${s.id}">${esc(s.name)} (L${s.levels[ch.class_id]}, up to ${s.cap})` +
+    `${!ch.known && s.levels[ch.class_id] > lvl ? " – above level" : ""}</option>`).join("") : `<option value="">no charm spell</option>`;
+  // A pick is saved as "picked:best"; once a better spell is available (a level-up, a fresh
+  // spellbook export) the old pick no longer applies.
+  const best = bestSpell(ch, lvl), [picked, bestThen] = (keepSaved && store.get("spell." + ch.key) || "").split(":");
+  sel.value = picked && bestThen === String(best ? best.id : "") && list.some(s => String(s.id) === picked) ? picked : best ? best.id : "";
+}
+
+// The level range is remembered per character and spell; a spell without one starts at cap - window .. cap.
+const rangeKey = () => `range.${$("char").value}.${$("spell").value}`;
+function setLevelRange() {
+  const c = cap(), saved = store.get(rangeKey());
+  if (saved) [$("minlvl").value, $("maxlvl").value] = saved.split(",");
+  else { $("maxlvl").value = c || ""; $("minlvl").value = c ? Math.max(1, c - DATA.level_window) : ""; }
+}
+
+function canCharm(s, r) {
+  const bodies = DATA.target_bodies[s.targettype];
+  return (bodies == null || bodies.includes(r.b)) && r.l <= s.cap;
+}
+
+function filtered() {
+  const s = spell();
+  if (!s) return [];
+  const q = $("search").value.trim().toLowerCase();
+  const lo = Number($("minlvl").value) || 0, hi = Number($("maxlvl").value) || 99;
+  const named = $("named").checked, raid = $("raid").checked, nospawn = $("nospawn").checked, live = $("live").checked;
+  const rows = DATA.npcs.filter(r => canCharm(s, r) && r.l >= lo && r.l <= hi &&
+    (!named || r.named) && (raid || !r.raid) && (nospawn ? true : r.z.length) && (!live || !r.z.length && nospawn || r.z.some(z => z[6])) &&
+    (!q || r.n.toLowerCase().includes(q) || r.z.some(z => z[1].toLowerCase().includes(q) || z[0].includes(q))));
+  const col = COLUMNS.find(c => c.key === sort.key) || COLUMNS[2];
+  const val = col.sortVal || (r => r[col.key]);
+  rows.sort((a, b) => {
+    const x = val(a), y = val(b);
+    const c = typeof x === "number" && typeof y === "number" ? x - y : String(x).localeCompare(String(y), undefined, {numeric: true});
+    return c * sort.dir || b.s - a.s;
+  });
+  return rows;
+}
+
+function render() {
+  const ch = character(), s = spell(), rows = filtered();
+  $("spellinfo").innerHTML = s ?
+    `<a href="${spellUrl(s.id)}" target="_blank" rel="noopener"><b>${esc(s.name)}</b></a>: charms <b>${esc(DATA.target_labels[s.targettype])}</b> ` +
+    `up to level <b>${s.cap}</b> · lasts up to ${duration(s.duration)}` +
+    (s.resist_diff ? ` · resist adjustment ${s.resist_diff}` : "") +
+    (ch.known && !ch.known.includes(s.id) ? ` · <span class="warn">not in ${esc(ch.name)}'s spellbook</span>` : "") +
+    (!ch.known && s.levels[ch.class_id] > level() ? ` · <span class="warn">needs level ${s.levels[ch.class_id]}</span>` : "") :
+    `<span class="warn">${esc(ch.name)} has no charm spell in their spellbook${ch.known ? "" : " at this level"}.</span>` +
+    (ch.known ? " Pick a New character entry to see what a spell would reach." : "");
+  const thead = $("table").tHead, tbody = $("table").tBodies[0];
+  thead.innerHTML = "<tr>" + COLUMNS.map(c => `<th data-key="${c.key}" class="${c.num ? "num" : ""}"` +
+    (c.title ? ` title="${esc(c.title)}"` : "") +
+    (sort.key === c.key ? ` aria-sort="${sort.dir > 0 ? "ascending" : "descending"}"` : "") + `>${esc(c.label)}</th>`).join("") + "</tr>";
+  tbody.innerHTML = rows.slice(0, shown).map(r => "<tr>" +
+    COLUMNS.map(c => `<td class="${c.num ? "num" : ""}">${c.html ? c.html(r) : esc(r[c.key])}</td>`).join("") + "</tr>").join("")
+    || `<tr><td colspan="${COLUMNS.length}">Nothing to show.</td></tr>`;
+  $("more").hidden = rows.length <= shown;
+  $("more").textContent = `Show ${Math.min(PAGE, rows.length - shown)} more of ${rows.length - shown} remaining`;
+  const strong = rows.filter(r => r.s >= 1.5).length;
+  $("summary").innerHTML = s ? `<b>${rows.length}</b> NPCs ${esc(s.name)} can charm in this level range, ` +
+    `<b>${strong}</b> of them scoring 1.5× or more a typical mob of their level. ` +
+    `Showing ${Math.min(rows.length, shown)}.` : "";
+}
+
+function toCsv() {
+  const rows = filtered();
+  const cell = v => { const s = String(v ?? ""); return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
+  const header = COLUMNS.map(c => c.label).concat(["PQDI"]);
+  const lines = [header.map(cell).join(",")].concat(rows.map(r => COLUMNS.map(c => cell(c.text ? c.text(r) : r[c.key]))
+    .concat([npcUrl(r.id)]).map(cell).join(",")));
+  const blob = new Blob([lines.join("\r\n") + "\r\n"], {type: "text/csv"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `charm-${character().name.replace(/\W+/g, "_")}-${(spell() || {name: "none"}).name.replace(/\W+/g, "_")}.csv`;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 60000);
+}
+
+function init() {
+  const sel = $("char");
+  const real = DATA.characters.filter(c => !c.new), fresh = DATA.characters.filter(c => c.new);
+  const group = (label, list) => `<optgroup label="${label}">` + list.map(c =>
+    `<option value="${esc(c.key)}">${esc(c.name)}${c.new ? "" : ` (${esc(DATA.classes[c.class_id])} ${c.level})`}</option>`).join("") + "</optgroup>";
+  sel.innerHTML = (real.length ? group("Characters", real) : "") + group("New character", fresh);
+  // Default to the first character that has a charm spell.
+  const saved = store.get("char");
+  sel.value = saved && DATA.characters.some(c => c.key === saved) ? saved : (real.find(c => c.spell) || fresh[0]).key;
+  const restore = () => {
+    const ch = character();
+    $("level").value = store.get("level." + ch.key) || ch.level;
+    $("level").disabled = !ch.new;
+    fillSpells(true);
+    setLevelRange();
+  };
+  restore();
+  const saveRange = () => store.set(rangeKey(), `${$("minlvl").value},${$("maxlvl").value}`);
+  sel.addEventListener("change", () => { store.set("char", sel.value); shown = PAGE; restore(); render(); });
+  $("level").addEventListener("input", () => {
+    store.set("level." + sel.value, $("level").value); store.set("spell." + sel.value, "");
+    fillSpells(false); setLevelRange(); shown = PAGE; render();
+  });
+  $("spell").addEventListener("change", () => {
+    const best = bestSpell(character(), level());
+    store.set("spell." + sel.value, `${$("spell").value}:${best ? best.id : ""}`);
+    setLevelRange(); shown = PAGE; render();
+  });
+  ["minlvl", "maxlvl"].forEach(id => $(id).addEventListener("input", () => { saveRange(); shown = PAGE; render(); }));
+  for (const id of ["named", "raid", "nospawn", "live"]) {
+    const v = store.get("opt." + id);
+    if (v != null) $(id).checked = v === "1";
+    $(id).addEventListener("input", () => { store.set("opt." + id, $(id).checked ? "1" : "0"); shown = PAGE; render(); });
+  }
+  $("search").addEventListener("input", () => { shown = PAGE; render(); });
+  $("table").tHead.addEventListener("click", e => {
+    const th = e.target.closest("th");
+    if (!th) return;
+    if (sort.key === th.dataset.key) sort.dir = -sort.dir;
+    else { sort.key = th.dataset.key; sort.dir = COLUMNS.find(c => c.key === th.dataset.key).num ? -1 : 1; }
+    render();
+  });
+  $("more").addEventListener("click", () => { shown += PAGE; render(); });
+  $("csv").addEventListener("click", toCsv);
+  $("livelabel").textContent = `Only spawns live in ${EXPANSIONS[DATA.era] || "era " + DATA.era}`;
+  const w = DATA.weights;
+  $("footer").innerHTML = `Score: each NPC's DPS, HP and AC divided by the median of ordinary NPCs of its level ` +
+    `(spawning, not raid targets or merchants), combined as a weighted geometric mean ` +
+    `(DPS ${w.dps * 100}%, HP ${w.hp * 100}%, AC ${w.ac * 100}%, each ratio capped at 5×). 1.00 is a typical mob. ` +
+    `A charmed pet keeps the NPC's own stats. DPS is estimated from the server's charmed pet code: attacks per round, ` +
+    `double attack by level, triple attack for level 60+ warriors and monks, dual wield only for NPCs flagged with it ` +
+    `(offhand weapons from loot aren't counted), average of min and max hit. Charmed pets never flurry or rampage. ` +
+    `Misses, kicks and bashes, and spells are ignored. Not charmable and left out: NPCs immune to charm, magic or players, ` +
+    `merchants, bankers and guildmasters, Veksar's level 50+ NPCs. Struck-out zones aren't live in ` +
+    `${EXPANSIONS[DATA.era] || "era " + DATA.era}. Database dump ${esc(DATA.db_version)}.` +
+    (DATA.skipped.length ? ` Skipped (not a charm class): ${esc(DATA.skipped.join(", "))}.` : "");
+  render();
+}
+init();
+</script>
+</body>
+</html>

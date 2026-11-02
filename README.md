@@ -27,6 +27,7 @@ Everything runs through `./quarm` at the repo root:
 ./quarm -h               # list the tools
 ./quarm fetch            # download and convert the latest database dump
 ./quarm research         # write the research needs page and CSV to data/
+./quarm charm            # write the charm targets page and CSV to data/
 ./quarm schema-ref       # regenerate docs/schema_reference.md
 ```
 
@@ -184,6 +185,53 @@ level comes from PQ Companion's `user.db` when it's readable. Recipes come from 
 A recipe's class is set by its research tome, since some spells have different recipes for different
 classes.
 
+## Charm targets
+
+The charm tool (`quarmtools/tools/charm.py`) finds NPCs worth charming: mobs far stronger than
+other NPCs of their level, within your charm spell's level cap. Ryklo Rikes in The Dawnshroud Peaks
+(level 44, 20,000 HP, 61–177 damage on a 2.0 second delay) is the kind of pet it looks for. Open it
+from the front end's home page (`/charm`, `/charm?era=3` for the "live spawns" filter as before
+Planes of Power). From the command line it writes `data/charm_targets.html` and
+`data/charm_targets.csv`, and prints each character's top five.
+
+```sh
+./quarm charm                      # reads the Zeal spellbook exports, like ./quarm research
+./quarm charm --eq-dir /path/to/EQ # or set QUARM_EQ_DIR
+```
+
+The page has:
+
+- **A character picker.** It lists every Enchanter, Necromancer, Druid and Bard with a
+  `<Name>-Spellbook.txt` export, using the charm spells in their book, plus a "New <class>"
+  entry for each charm class with a level you can set. The **charm spell** defaults to the
+  highest-cap one. Dictate and Enslave Death are picked only when nothing else is available,
+  since they're unresistable and short. It sets the level cap and what can be charmed: any NPC,
+  undead (Undead, Summoned Undead, Vampire), animals or plants.
+- **A score.** Each NPC's melee DPS, HP and AC are divided by the median of ordinary NPCs of the
+  same level, then combined as a weighted geometric mean (DPS 50%, HP 30%, AC 20%, each ratio
+  capped at 5×). 1.00 is a typical mob for its level; Ryklo scores about 1.94. The raw numbers and
+  each ratio are their own sortable columns, with HP regen, magic resist, hit range, delay, hits
+  per round, levels below the cap, special abilities, and where it spawns (spawn chance, respawn
+  time, expansion).
+- **The DPS estimate** follows what the server does for charmed pets (EQMacEmu `zone/mob_ai.cpp`):
+  - attacks per round plus a level-based double attack chance;
+  - triple attack for level 60+ warriors and monks;
+  - an offhand round for NPCs flagged to dual wield;
+  - the average of min and max hit, divided by the delay.
+
+  Charmed pets never flurry or rampage, so those don't count. A charmed NPC keeps its own stats.
+- **What can't be charmed** is left out:
+  - NPCs flagged immune to charm (special ability 14), to magic (20) or to players (35);
+  - merchants, bankers and guildmasters;
+  - Veksar's level 50+ NPCs;
+  - untargetable and trigger body types.
+- **Filters.** The level range defaults to the cap minus 15 up to the cap. Other filters: named only,
+  show raid targets (hidden by default), show NPCs that never spawn, only spawns live in the
+  current era, and search by NPC or zone. Download CSV saves the current view. The page remembers
+  its settings per character.
+
+It doesn't model charm resists or breaks: magic resist and the level margin are there to judge that.
+
 ## Schema docs
 
 - [docs/schema.md](docs/schema.md): the key tables (items, NPCs, spawns, loot, merchants, spells,
@@ -212,6 +260,9 @@ Tests use only the standard library. They cover:
 - the FTS5 name-search tables (`tests/test_fts.py`);
 - research needs (`tests/test_research_needs.py`): recipe classes and dedupe, shared-bank merging,
   alternative recipes, owned scrolls and duplicate flags;
+- charm targets (`tests/test_charm.py`): special abilities, the DPS model, charm rules (level cap,
+  body types, immunities), spell choice, scoring and merging repeated NPCs, plus checks against the
+  real database when it's present (Ryklo ranks near the top for Boltran's Agacerie);
 - the `./quarm` entry point (`tests/test_frontend.py`): tool discovery, serving by default, command
   dispatch, the server's pages and error responses, and the research page's placeholders.
 

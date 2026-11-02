@@ -15,6 +15,8 @@
 
 ## Analysis tools (ideas)
 - [x] Research needs: words/pages each character still needs for spell research (`./quarm research`).
+- [x] Charm targets: NPCs unusually strong for their level within a charm spell's cap (`./quarm charm`).
+- [ ] Charm targets: count NPC offhand weapons from loot (equip_item) for dual wield, and model charm resist/break odds.
 - [ ] Item lookup: stats, which NPCs drop it (with drop chance), where those NPCs spawn, and merchants that sell it.
 - [ ] NPC lookup: spawn locations, spawn chance in each spawngroup, respawn timers, loot table, and faction hits.
 - [ ] Zone summaries: NPC list, notable drops, and level ranges.
