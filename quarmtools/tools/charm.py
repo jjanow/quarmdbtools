@@ -46,7 +46,7 @@ from collections import defaultdict
 from pathlib import Path
 
 from quarmtools import common, web
-from quarmtools.tools import research
+from quarmtools.tools import hunt, research
 
 NAME = "charm"
 SUMMARY = "NPCs worth charming: unusually strong mobs for their level, within your charm spell's cap."
@@ -283,10 +283,10 @@ def load_npcs(conn, era):
     for row in conn.execute("""
             SELECT id, name, level, maxlevel, class, race, bodytype, hp, mindmg, maxdmg, attack_count,
                    attack_delay, AC, MR, hp_regen_rate, special_abilities, npc_spells_id, raid_target,
-                   rare_spawn, see_invis, runspeed
+                   rare_spawn, see_invis, runspeed, exp_pct, npc_faction_id
             FROM npc_types"""):
         (nid, name, level, maxlevel, cls, race, body, hp, mindmg, maxdmg, attack_count, delay, ac, mr, regen,
-         special, spells_id, raid, rare, see_invis, runspeed) = row
+         special, spells_id, raid, rare, see_invis, runspeed, exp_pct, faction_id) = row
         npcs[nid] = {
             "id": nid, "name": research.npc_display_name(name or ""), "raw_name": name or "",
             "level": level or 0, "maxlevel": max(maxlevel or 0, level or 0), "class_id": cls or 0, "race": race,
@@ -294,7 +294,7 @@ def load_npcs(conn, era):
             "attack_count": attack_count or 0, "attack_delay": delay or 0, "ac": ac or 0, "mr": mr or 0,
             "hp_regen": regen or 0, "abilities": parse_special_abilities(special), "caster": bool(spells_id),
             "raid": bool(raid), "rare": bool(rare), "see_invis": bool(see_invis), "runspeed": runspeed or 0,
-            "spawns": [],
+            "exp_pct": 100 if exp_pct is None else exp_pct, "faction_id": faction_id or 0, "spawns": [],
         }
     by_zone = {}
     for row in conn.execute("""
@@ -476,9 +476,23 @@ def gather(db_path, eq_dir, pqc_db, era=DEFAULT_ERA):
         npcs = list(load_npcs(conn, era).values())
         chars, skipped = characters(spells, eq_dir, pqc_db, conn)
         source = dict(conn.execute("SELECT key, value FROM _meta").fetchall())
+        factions = hunt.load_factions(conn)
+        zones = hunt.zone_info(conn, zone_terrain)
+        xp = hunt.xp_tables(conn)
     finally:
         conn.close()
     baselines = score_npcs(npcs)
+    targets = hunt.kill_targets(npcs, JUNK_BODIES)
+    for ch in chars:
+        if ch.get("new"):
+            continue
+        quarmy = hunt.read_quarmy(eq_dir / f"{ch['key']}-Quarmy.txt") if eq_dir else {}
+        ch["race"], ch["deity"] = quarmy.get("race"), quarmy.get("deity")
+        ch["scowl"], ch["starts_scowl"] = hunt.already_scowling(factions, quarmy or None,
+                                                                hunt.pqc_buckets(pqc_db, ch["key"]))
+    used_sets = {t["f"] for t in targets}
+    sets = {nfid: hits for nfid, hits in factions["sets"].items() if nfid in used_sets}
+    used_factions = {fid for hits in sets.values() for fid, _ in hits}
     max_cap = max((s["cap"] for s in spells), default=0)
     # Ship only NPCs some charm spell could take; the page narrows it to the chosen spell.
     rows = merge_copies(candidate(n) for n in npcs
@@ -489,6 +503,10 @@ def gather(db_path, eq_dir, pqc_db, era=DEFAULT_ERA):
         "classes": {c: n for c, n in CHARM_CLASSES.items()}, "npc_classes": NPC_CLASSES, "bodies": BODY_NAMES,
         "target_labels": TARGET_LABELS, "target_bodies": {t: sorted(b) if b else None for t, b in TARGET_BODIES.items()},
         "baselines": {lvl: {k: round(v, 1) for k, v in b.items()} for lvl, b in baselines.items()},
+        "hunt": {"targets": targets, "zones": zones, "sets": sets, "xp": xp,
+                 "factions": {fid: factions["names"].get(fid, f"faction {fid}") for fid in sorted(used_factions)},
+                 "matters": sorted(factions["matters"] & used_factions),
+                 "overhead": hunt.OVERHEAD, "survive": hunt.SURVIVE, "pets_per_zone": hunt.PETS_PER_ZONE},
         "terrain_rank": TERRAIN_RANK, "weights": WEIGHTS, "level_window": LEVEL_WINDOW, "db_version": source.get("source_version", "?"), "era": era,
     }
 
@@ -536,6 +554,19 @@ def page(params):
     return render_html(data, nav=web.HOME_LINK)
 
 
+def print_hunting(data, spells):
+    """Each real character's best open-ground zones at their level, with the default charm spell."""
+    for ch in data["characters"]:
+        spell = spells.get(ch["spell"])
+        if ch.get("new") or not spell:
+            continue
+        matters = set(data["hunt"]["matters"]) - set(ch.get("scowl", {}))
+        ranked = hunt.rank_zones(data, ch["level"], spell, ch.get("race"), matters)[:5]
+        print(f"{ch['name']} hunting grounds at level {ch['level']} with {spell['name']}: " + (", ".join(
+            f"{data['hunt']['zones'][zone][0]} ({pet['n']} L{pet['l']}, ~{total * 100:.0f}% of a level/hour)"
+            for total, zone, pet, _ in ranked) or "none found"))
+
+
 def add_arguments(ap):
     ap.add_argument("--db", type=Path, default=DEFAULT_DB)
     ap.add_argument("--eq-dir", type=Path, default=research.DEFAULT_EQ_DIR, help="EverQuest dir with the Zeal exports")
@@ -570,6 +601,7 @@ def run(args):
               f"(up to level {spell['cap']}, {TARGET_LABELS[spell['targettype']]}): top from level {low} up, "
               f"outdoor first: " + ", ".join(f"{r['n']} L{r['l']} ({r['s']:.2f}, {best_terrain(r['z'], True)})"
                                              for r in top[:5]))
+    print_hunting(data, spells)
     if data["skipped"]:
         print("skipped (not a charm class): " + ", ".join(data["skipped"]))
     print(f"wrote {args.out}\nwrote {args.csv}")

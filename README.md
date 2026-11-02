@@ -192,7 +192,7 @@ other NPCs of their level, within your charm spell's level cap. Ryklo Rikes in T
 (level 44, 20,000 HP, 61–177 damage on a 2.0 second delay) is the kind of pet it looks for. Open it
 from the front end's home page (`/charm`, `/charm?era=3` for the "live spawns" filter as before
 Planes of Power). From the command line it writes `data/charm_targets.html` and
-`data/charm_targets.csv`, and prints each character's top five.
+`data/charm_targets.csv`, and prints each character's top five pets and top five hunting grounds.
 
 ```sh
 ./quarm charm                      # reads the Zeal spellbook exports, like ./quarm research
@@ -239,6 +239,36 @@ The page has:
 
 It doesn't model charm resists or breaks: magic resist and the level margin are there to judge that.
 
+### Hunting grounds
+
+The page's second tab ranks zones for leveling with a charmed pet, using the same character, level
+and charm spell (`quarmtools/tools/hunt.py`, mirrored in the page's JavaScript). Charm breaks when
+you zone, so a zone needs both a pet the spell can take and things to kill:
+
+- **Kill targets** con above green, give experience (`exp_pct` above 0), aren't raid targets,
+  merchants or unhittable (boats, triggers, melee or player immune), and don't lower a faction that
+  matters. The pet must kill each without losing more than 60% of its HP (mob HP ÷ pet DPS, against
+  the mob's DPS; misses, mitigation and the mob's spells are ignored).
+- **Experience** follows EQMacEmu (`zone/exp.cpp`): level² × (ZEM + the `Zone:HotZoneBonus`
+  rule, 0.67, in zones with `hotzone` set, which is every open zone in this dump) × `exp_pct`, the light blue
+  reductions, the level 51+ bonus for NPCs above 45 within 5 levels, `level_exp_mods`, the 12.5%
+  per-kill cap and the experience a level needs (`GetEXPForLevel`, with the race mod). Solo only.
+  Since Luclin a kill with no damage from you gives 25%, so the estimate assumes you hit each mob.
+- **An hour** of each kill costs the fight, the pet regenerating what it lost and a pull overhead
+  (30 seconds, adjustable). Mobs are taken best experience per second first, each only as often as
+  it spawns (points × chance ÷ respawn). The best of the zone's 20 highest-DPS pets is shown. The
+  result, a share of a level per hour, is for comparing zones and runs high in absolute terms.
+- **Factions that matter** default to every faction merchants, bankers, guildmasters or guards
+  belong to, except ones PQ Companion last saw the character scowling or threatening with. Race,
+  class and deity (from Zeal's `<Name>-Quarmy.txt`) only add a "starts scowling" hint, since quests
+  and kills since then aren't known. The list can be changed per character on the page.
+- **Zones** default to outdoor and mixed. Zones that need a flag (`flag_needed`, plus a hand list of
+  Planes of Power zones in `FLAG_ZONES`, since the column only marks two) are marked and can be
+  hidden. The best pet shows its spawn points, chance and respawn in that zone.
+  Clicking a zone lists every mob in it with its con, experience, fight time, faction hits and
+  whether the plan uses it. The **level ladder** shows the best three zones at each level up to 64,
+  with the charm spell the class gets by then.
+
 ## Schema docs
 
 - [docs/schema.md](docs/schema.md): the key tables (items, NPCs, spawns, loot, merchants, spells,
@@ -271,6 +301,9 @@ Tests use only the standard library. They cover:
   body types, immunities), spell choice, scoring, merging repeated NPCs and zone terrain, plus checks
   against the real database when it's present (Ryklo ranks near the top for Boltran's Agacerie and
   is outdoors, and every zone with spawns is classified);
+- hunting grounds (`tests/test_hunt.py`): con colors, kill experience and level spans, faction
+  defaults and safety, kill target filters, the hourly plan and the same-zone ranking, plus a check
+  that The Dawnshroud Peaks and Ryklo come out near the top at level 44 with Cajoling Whispers;
 - the `./quarm` entry point (`tests/test_frontend.py`): tool discovery, serving by default, command
   dispatch, the server's pages and error responses, and the research page's placeholders.
 

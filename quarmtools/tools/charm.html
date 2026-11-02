@@ -79,6 +79,38 @@ ul.plain { margin: 0; padding: 0; list-style: none; }
 .spellinfo { background: var(--accent-soft); border: 1px solid var(--border); border-radius: 12px; padding: 8px 14px; margin: 0 0 12px; }
 details summary { cursor: pointer; color: var(--accent); }
 footer { color: var(--muted); font-size: 12px; margin-top: 14px; }
+.tabs { display: flex; gap: 4px; margin: 0 0 12px; border-bottom: 1px solid var(--border); }
+.tabs button {
+  font: inherit; font-weight: 550; padding: 7px 14px; border: 0; border-bottom: 2px solid transparent; margin-bottom: -1px;
+  background: none; color: var(--muted); cursor: pointer;
+}
+.tabs button:hover { color: var(--text); }
+.tabs button[aria-selected=true] { color: var(--accent); border-bottom-color: var(--accent); }
+.view { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.view > * { flex: none; }
+.view > .wrap { flex: 1 1 auto; }
+.con { font-weight: 600; white-space: nowrap; }
+.con.c0 { color: var(--ok); } .con.c1 { color: #0891b2; } .con.c2 { color: #2563eb; }
+.con.c3 { color: var(--text); } .con.c4 { color: #ca8a04; } .con.c5 { color: #dc2626; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .con.c1 { color: #22d3ee; }
+  :root:not([data-theme="light"]) .con.c2 { color: #60a5fa; } :root:not([data-theme="light"]) .con.c4 { color: #facc15; }
+  :root:not([data-theme="light"]) .con.c5 { color: #f87171; } }
+:root[data-theme="dark"] .con.c1 { color: #22d3ee; } :root[data-theme="dark"] .con.c2 { color: #60a5fa; }
+:root[data-theme="dark"] .con.c4 { color: #facc15; } :root[data-theme="dark"] .con.c5 { color: #f87171; }
+.panel { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 8px 14px; margin: 0 0 12px; box-shadow: var(--shadow); }
+.panel > summary { font-weight: 550; }
+.faclist { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 2px 16px; max-height: 260px; overflow: auto; margin-top: 8px; }
+.faclist label { flex-direction: row; align-items: center; gap: 7px; font-size: 13px; color: var(--text); font-weight: 400; }
+.facbar { display: flex; gap: 10px; align-items: center; margin-top: 8px; flex-wrap: wrap; }
+.facbar button.more { margin: 0; }
+tr.zone { cursor: pointer; }
+tr.zone.open { background: var(--hover); }
+tr.detail > td { background: var(--panel-2); padding: 10px 14px 14px; }
+tr.detail table { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; }
+tr.detail th { position: static; }
+.ladder table td, .ladder table th { padding: 5px 8px; }
+.ladder .scroll { max-height: 320px; overflow: auto; margin-top: 8px; }
+.big { font-size: 15px; font-weight: 650; }
 @media (max-width: 640px) { h1 { width: 100%; } button.csv { margin-left: 0; } input[type=search] { min-width: 0; } }
 @media (max-height: 520px) { body { display: block; height: auto; } }
 </style>
@@ -91,7 +123,12 @@ footer { color: var(--muted); font-size: 12px; margin-top: 14px; }
   <label>Charm spell <select id="spell"></select></label>
 </header>
 <main>
+  <div class="tabs" role="tablist">
+    <button role="tab" data-view="pets" aria-selected="true">Charm pets</button>
+    <button role="tab" data-view="hunt" aria-selected="false">Hunting grounds</button>
+  </div>
   <p class="spellinfo" id="spellinfo"></p>
+  <section class="view" id="petsView">
   <div class="bar">
     <label>Search <input id="search" type="search" placeholder="NPC or zone"></label>
     <label>Min level <input id="minlvl" type="number" min="1" max="65"></label>
@@ -109,6 +146,28 @@ footer { color: var(--muted); font-size: 12px; margin-top: 14px; }
   <p class="summary" id="summary"></p>
   <div class="wrap" id="wrap"><table id="table"><thead></thead><tbody></tbody></table><button class="more" id="more" hidden></button></div>
   <footer id="footer"></footer>
+  </section>
+  <section class="view" id="huntView" hidden>
+  <div class="bar">
+    <label>Search <input id="hsearch" type="search" placeholder="Zone, pet or mob"></label>
+    <label>Zones <select id="hterrain">
+      <option value="0">Outdoor only</option><option value="1" selected>Outdoor &amp; mixed</option><option value="3">All</option>
+    </select></label>
+    <label title="Only pets scoring at least this much against a typical NPC of their level">Min pet score <input id="hscore" type="number" step="0.1" min="0" value="1"></label>
+    <label title="Seconds per kill spent pulling, walking and keeping the charm up">Seconds per pull <input id="hover" type="number" min="0" step="5"></label>
+    <label class="check"><input id="hflag" type="checkbox" checked> Zones that need a flag</label>
+  </div>
+  <details class="panel" id="factions"><summary id="facsum"></summary>
+    <div class="facbar"><input id="facsearch" type="search" placeholder="Filter factions">
+      <label class="check"><input id="facall" type="checkbox"> Show every faction</label>
+      <button class="more" id="facreset">Reset to defaults</button></div>
+    <div class="faclist" id="faclist"></div>
+  </details>
+  <details class="panel ladder" id="ladder"><summary>Level ladder: the best zones for each level on the way to 65</summary><div id="ladderbody"></div></details>
+  <p class="summary" id="hsummary"></p>
+  <div class="wrap"><table id="htable"><thead></thead><tbody></tbody></table></div>
+  <footer id="hfooter"></footer>
+  </section>
 </main>
 <script>
 const DATA = /*DATA*/null;
@@ -130,6 +189,7 @@ const terrainTag = t => `<span class="terrain ${t}" title="${TERRAIN_TITLES[t] |
 // The most open terrain among the zones shown for an NPC.
 const terrain = r => zones(r).reduce((best, z) => RANK[z[7]] < RANK[best] ? z[7] : best, "unknown");
 let shown = PAGE;
+let view = "pets";
 let sort = {key: "s", dir: -1};
 
 const fmt = (n, d = 0) => n == null ? "" : Number(n).toLocaleString(undefined, {maximumFractionDigits: d, minimumFractionDigits: d});
@@ -254,6 +314,7 @@ function render() {
     (!ch.known && s.levels[ch.class_id] > level() ? ` · <span class="warn">needs level ${s.levels[ch.class_id]}</span>` : "") :
     `<span class="warn">${esc(ch.name)} has no charm spell in their spellbook${ch.known ? "" : " at this level"}.</span>` +
     (ch.known ? " Pick a New character entry to see what a spell would reach." : "");
+  if (view === "hunt") { renderHunt(); return; }
   const thead = $("table").tHead, tbody = $("table").tBodies[0];
   thead.innerHTML = "<tr>" + COLUMNS.map(c => `<th data-key="${c.key}" class="${c.num ? "num" : ""}"` +
     (c.title ? ` title="${esc(c.title)}"` : "") +
@@ -348,6 +409,271 @@ function init() {
   render();
 }
 init();
+
+// ---------------------------------------------------------------------------- hunting grounds
+// Same model as quarmtools/tools/hunt.py (rank_zones); keep the two in step.
+const H = DATA.hunt, XP = H.xp;
+const CON_NAMES = ["green", "light blue", "blue", "white", "yellow", "red"];
+const conTag = (player, mob) => { const c = (XP.cons[player] || [])[Math.min(mob, XP.cons[player].length - 1)]; return `<span class="con c${c}">${CON_NAMES[c]}</span>`; };
+const TARGETS_BY_ZONE = {};
+for (const t of H.targets) for (const z of t.z) (TARGETS_BY_ZONE[z[0]] ||= []).push([t, z]);
+const FACTION_ORDER = Object.keys(H.factions).sort((a, b) => H.factions[a].localeCompare(H.factions[b]));
+const pct = (f, d) => `${fmt(f * 100, d ?? (f >= 0.1 ? 0 : 1))}%`;
+const perHour = z => z[1] * (z[3] || 100) / 100 * (z[2] ? 3600 / z[2] : 1);
+const mins = s => s >= 90 ? `${fmt(s / 60, 1)} min` : `${fmt(s)}s`;
+
+// Kill experience as a fraction of the player's level (zone/exp.cpp), capped at 12.5% a kill.
+function killFrac(player, mob, zem, expPct, race) {
+  const row = XP.mult[player];
+  if (!row || expPct <= 0) return 0;
+  const mult = row[Math.min(mob, row.length - 1)];
+  if (!mult) return 0;
+  const exp = mob * mob * zem * 100 * expPct / 100 * mult * (XP.hell[player] || 1);
+  return Math.min(exp / (XP.span[player] * (XP.race_exp[race] || 100) / 100), XP.cap);
+}
+
+// Factions that matter for this character: the defaults (minus ones PQ Companion saw it scowling with),
+// then the page's own on/off overrides.
+const facKey = () => "fac." + $("char").value;
+function facOverrides() { try { return JSON.parse(store.get(facKey()) || "{}"); } catch (e) { return {}; } }
+function defaultMatters(ch) { const off = ch.scowl || {}; return new Set(H.matters.map(String).filter(f => !(f in off))); }
+function matters() {
+  const set = defaultMatters(character());
+  for (const [f, on] of Object.entries(facOverrides())) on ? set.add(f) : set.delete(f);
+  return set;
+}
+function factionHits(nfid, m) {
+  const bad = [], other = [], good = [];
+  for (const [f, v] of H.sets[nfid] || []) (v > 0 ? good : m.has(String(f)) ? bad : other).push([f, v]);
+  return {bad, other, good};
+}
+const facNames = list => list.map(([f, v]) => `${esc(H.factions[f] || "faction " + f)} ${v > 0 ? "+" : ""}${v}`).join(", ");
+
+const huntOpts = () => ({overhead: $("hover").value === "" ? H.overhead : Number($("hover").value),
+  minScore: Number($("hscore").value) || 0, maxRank: Number($("hterrain").value), flags: $("hflag").checked});
+
+// One pet's hour in a zone. Each target gets a status; viable ones are taken greedily by experience per
+// second of cycle time (fight, pet regen for what it lost, overhead), each up to how often it spawns.
+function zonePlan(pet, zone, zem, player, race, m, overhead, detail) {
+  const opts = [], rows = [];
+  for (const [t, z] of TARGETS_BY_ZONE[zone] || []) {
+    const hits = factionHits(t.f, m), frac = killFrac(player, t.l, zem, t.x, race);
+    const ttk = pet.dps > 0 ? t.hp / pet.dps : Infinity, lost = t.dps * ttk;
+    const status = hits.bad.length ? "faction" : !frac ? "no xp" : lost > H.survive * pet.hp ? "too strong" : "ok";
+    const row = {t, z, frac, ttk, lost, hits, status, kills: 0, cycle: ttk + lost / (Math.max(pet.rg, 1) / 6) + overhead};
+    if (status === "ok") opts.push(row);
+    if (detail) rows.push(row);
+  }
+  opts.sort((a, b) => b.frac / b.cycle - a.frac / a.cycle);
+  let budget = 3600, total = 0;
+  for (const o of opts) {
+    if (budget <= 0) break;
+    o.kills = Math.min(perHour(o.z), budget / o.cycle);
+    budget -= o.kills * o.cycle;
+    total += o.kills * o.frac;
+  }
+  return {total, used: opts.filter(o => o.kills > 0), rows};
+}
+
+function petsByZone(s, minScore) {
+  const out = {};
+  for (const r of DATA.npcs) {
+    if (r.raid || r.s < minScore || !canCharm(s, r)) continue;
+    for (const z of r.z) if (z[6]) (out[z[0]] ||= []).push(r);
+  }
+  for (const k in out) out[k] = out[k].sort((a, b) => b.dps - a.dps).slice(0, H.pets_per_zone);
+  return out;
+}
+
+function zoneOk(zone, o) {
+  const info = H.zones[zone];
+  return info && (o.maxRank >= 3 || RANK[info[1]] <= o.maxRank) && (o.flags || !info[4]);
+}
+
+// Every zone with a pet and something to kill, best first: {zone, info, total, pet, used, pets: [[pet, total]]}.
+function rankZones(player, s, race, m, o) {
+  const out = [], pets = petsByZone(s, o.minScore);
+  for (const [zone, list] of Object.entries(pets)) {
+    if (!zoneOk(zone, o)) continue;
+    const info = H.zones[zone], tried = [];
+    for (const p of list) {
+      const plan = zonePlan(p, zone, info[2], player, race, m, o.overhead, false);
+      if (plan.total > 0) tried.push([p, plan]);
+    }
+    if (!tried.length) continue;
+    tried.sort((a, b) => b[1].total - a[1].total);
+    out.push({zone, info, total: tried[0][1].total, pet: tried[0][0], used: tried[0][1].used, pets: tried});
+  }
+  return out.sort((a, b) => b.total - a.total);
+}
+
+// The charm spell a character would use at a level: the book's, plus any scroll their class can buy by then.
+function ladderSpell(ch, lvl) {
+  const usable = DATA.spells.filter(s => s.levels[ch.class_id] != null &&
+    (ch.known && ch.known.includes(s.id) || s.scroll && s.levels[ch.class_id] <= lvl));
+  const normal = usable.filter(s => s.resist_diff > -1000), pool = normal.length ? normal : usable;
+  return pool.reduce((best, s) => !best || s.cap > best.cap || s.cap === best.cap && s.levels[ch.class_id] > best.levels[ch.class_id] ? s : best, null);
+}
+
+let openZone = null, ladderCache = {};
+function renderLadder(ch, m, o) {
+  if (!$("ladder").open) return;
+  const key = JSON.stringify([ch.key, level(), [...m].sort(), o]);
+  if (ladderCache.key !== key) {
+    const rows = [];
+    // The last level gained is the cap; at the cap kills only give AA experience.
+    for (let lvl = Math.max(1, level()); lvl < XP.max_level; lvl++) {
+      const s = ladderSpell(ch, lvl);
+      rows.push({lvl, s, zones: s ? rankZones(lvl, s, ch.race, m, o).slice(0, 3) : []});
+    }
+    ladderCache = {key, rows};
+  }
+  $("ladderbody").innerHTML = `<div class="scroll"><table><thead><tr><th class="num">Level</th><th>Charm spell</th><th>Best zones (pet · share of a level per hour)</th></tr></thead><tbody>` +
+    ladderCache.rows.map(r => `<tr><td class="num">${r.lvl}</td><td>${r.s ? `${esc(r.s.name)} <span class="small">up to ${r.s.cap}</span>` : `<span class="warn">none</span>`}</td><td>` +
+      (r.zones.length ? r.zones.map(z => `<b>${esc(z.info[0])}</b> <span class="small">${esc(z.pet.n)} L${z.pet.l} · ${pct(z.total)}/h (~${fmt(1 / z.total, 1)} h a level)</span>`).join("<br>") : `<span class="small">nothing found</span>`) +
+      `</td></tr>`).join("") + `</tbody></table></div>`;
+}
+
+function renderFactions(ch) {
+  const m = matters(), defaults = defaultMatters(ch), q = $("facsearch").value.trim().toLowerCase(), all = $("facall").checked;
+  const changed = Object.keys(facOverrides()).length;
+  $("facsum").innerHTML = `Factions that matter: <b>${m.size}</b> on` + (changed ? ` (${changed} changed from the defaults)` : "") +
+    ` <span class="small">· kills that lower any of these are left out</span>`;
+  if (!$("factions").open) return;
+  const scowl = ch.scowl || {}, starts = ch.starts_scowl || {};
+  const list = FACTION_ORDER.filter(f => (all || m.has(f) || defaults.has(f) || f in scowl) &&
+    (!q || H.factions[f].toLowerCase().includes(q)));
+  list.sort((a, b) => m.has(b) - m.has(a));
+  $("faclist").innerHTML = list.map(f => `<label title="${esc(scowl[f] || starts[f] || "")}"><input type="checkbox" data-f="${f}"${m.has(f) ? " checked" : ""}>` +
+    `${esc(H.factions[f])}${scowl[f] ? ` <span class="tag bad">${esc(scowl[f])}</span>` : starts[f] ? ` <span class="small">starts scowling</span>` : ""}</label>`).join("")
+    || `<span class="small">No factions match.</span>`;
+}
+
+// How reliably the pet is there: spawn points, chance and respawn in this zone.
+function petSpawn(p, zone) {
+  const z = p.z.find(z => z[0] === zone);
+  if (!z) return "";
+  return [z[3] > 1 ? `${z[3]} spawns` : "1 spawn", z[4] < 100 ? `<span class="${z[4] < 25 ? "warn" : ""}">${fmt(z[4], z[4] < 10 ? 1 : 0)}% chance</span>` : "",
+    respawn(z[5]) ? `respawn ${respawn(z[5])}` : ""].filter(Boolean).join(" · ");
+}
+
+function targetLine(o, player) {
+  return `<a href="${npcUrl(o.t.id)}" target="_blank" rel="noopener">${esc(o.t.n)}</a> L${o.t.l} ${conTag(player, o.t.l)} ` +
+    `<span class="small">${pct(o.frac, 1)}/kill · ${fmt(o.kills, o.kills < 10 ? 1 : 0)}/h</span>`;
+}
+
+function zoneDetail(r, player, race, m, o) {
+  const plan = zonePlan(r.pet, r.zone, r.info[2], player, race, m, o.overhead, true);
+  const order = {ok: 0, "too strong": 1, faction: 2, "no xp": 3};
+  plan.rows.sort((a, b) => (b.kills > 0) - (a.kills > 0) || order[a.status] - order[b.status] || b.frac - a.frac);
+  const blockers = {};
+  for (const row of plan.rows) if (row.status === "faction" && row.frac) for (const [f] of row.hits.bad) blockers[f] = (blockers[f] || 0) + 1;
+  const status = row => row.kills > 0 ? `<span class="hi">${fmt(row.kills, row.kills < 10 ? 1 : 0)} kills/h</span>` :
+    row.status === "ok" ? `<span class="small">spare (hour already full)</span>` :
+    row.status === "faction" ? `<span class="warn">faction: ${facNames(row.hits.bad)}</span>` :
+    row.status === "too strong" ? `<span class="warn">pet loses ${pct(row.lost / r.pet.hp)} HP</span>` : `<span class="small">no experience</span>`;
+  const blockList = Object.entries(blockers).sort((a, b) => b[1] - a[1]);
+  return `<div class="small" style="margin-bottom:8px">Other pets here: ` + (r.pets.slice(1, 4).map(([p, pl]) =>
+      `<a href="${npcUrl(p.id)}" target="_blank" rel="noopener">${esc(p.n)}</a> L${p.l} (${pct(pl.total)}/h)`).join(", ") || "none") +
+    (blockList.length ? ` · <span class="warn">Left out for faction:</span> ` + blockList.map(([f, n]) => `${esc(H.factions[f])} (${n} mobs)`).join(", ") : "") +
+    `</div><table><thead><tr><th>Target</th><th class="num">Level</th><th>Con</th><th class="num">Per kill</th><th class="num">Fight</th>` +
+    `<th class="num">Pet HP lost</th><th class="num">Spawns/h</th><th>Faction</th><th>Plan</th></tr></thead><tbody>` +
+    plan.rows.map(row => `<tr><td><a href="${npcUrl(row.t.id)}" target="_blank" rel="noopener">${esc(row.t.n)}</a>` +
+      (row.t.fl & 1 ? ` <span class="tag bad">summons</span>` : "") + (row.t.fl & 2 ? ` <span class="tag bad">magic weapons only</span>` : "") +
+      `</td><td class="num">${row.t.l}</td><td>${conTag(player, row.t.l)}</td><td class="num">${row.frac ? pct(row.frac, 2) : "–"}</td>` +
+      `<td class="num">${mins(row.ttk)}</td><td class="num">${pct(Math.min(row.lost / r.pet.hp, 9.99))}</td><td class="num">${fmt(perHour(row.z), 1)}</td>` +
+      `<td class="small">${row.hits.bad.length ? `<span class="warn">${facNames(row.hits.bad)}</span> ` : ""}${row.hits.other.length ? facNames(row.hits.other) + " " : ""}` +
+      `${row.hits.good.length ? `<span class="hi">${facNames(row.hits.good)}</span>` : ""}</td><td>${status(row)}</td></tr>`).join("") + `</tbody></table>`;
+}
+
+let huntRows = [];
+function renderHunt() {
+  const ch = character(), s = spell(), player = level(), m = matters(), o = huntOpts();
+  renderFactions(ch);
+  renderLadder(ch, m, o);
+  const thead = $("htable").tHead, tbody = $("htable").tBodies[0];
+  thead.innerHTML = `<tr><th class="num">#</th><th>Zone</th><th>Best pet</th><th class="num" title="Estimated share of a level per hour at this level">Level/h</th>` +
+    `<th class="num">Kills/h</th><th>What to kill</th></tr>`;
+  if (!s) { tbody.innerHTML = `<tr><td colspan="6">No charm spell.</td></tr>`; $("hsummary").innerHTML = ""; return; }
+  const q = $("hsearch").value.trim().toLowerCase();
+  huntRows = rankZones(player, s, ch.race, m, o).filter(r => !q || r.info[0].toLowerCase().includes(q) || r.zone.includes(q) ||
+    r.pets.some(([p]) => p.n.toLowerCase().includes(q)) || r.used.some(u => u.t.n.toLowerCase().includes(q)));
+  tbody.innerHTML = huntRows.map((r, i) => {
+    const kills = r.used.reduce((a, u) => a + u.kills, 0);
+    const row = `<tr class="zone${openZone === r.zone ? " open" : ""}" data-zone="${esc(r.zone)}"><td class="num">${i + 1}</td>` +
+      `<td><b>${esc(r.info[0])}</b> ${terrainTag(r.info[1])}<div class="small" title="Zone experience multiplier${r.info[6] ? ", plus the hot zone bonus" : ""}">ZEM ${fmt(r.info[5], 2)}${r.info[6] ? ` + hot ${fmt(r.info[2] - r.info[5], 2)}` : ""}` +
+      `${r.info[3] != null ? " · " + (EXPANSIONS[r.info[3]] || "era " + r.info[3]) : ""}${r.info[4] ? ` · <span class="warn">needs a flag</span>` : ""}</div></td>` +
+      `<td><a href="${npcUrl(r.pet.id)}" target="_blank" rel="noopener">${esc(r.pet.n)}</a> L${r.pet.l}` +
+      `<div class="small">score ${fmt(r.pet.s, 2)} · ${fmt(r.pet.dps, 0)} DPS · ${fmt(r.pet.hp)} HP</div>` +
+      `<div class="small">${petSpawn(r.pet, r.zone)}</div></td>` +
+      `<td class="num big">${pct(r.total)}</td><td class="num">${fmt(kills)}</td>` +
+      `<td><ul class="plain">${r.used.slice(0, 3).map(u => `<li>${targetLine(u, player)}</li>`).join("")}</ul>` +
+      (r.used.length > 3 ? `<span class="small">+${r.used.length - 3} more · click for all</span>` : "") + `</td></tr>`;
+    return row + (openZone === r.zone ? `<tr class="detail"><td colspan="6">${zoneDetail(r, player, ch.race, m, o)}</td></tr>` : "");
+  }).join("") || `<tr><td colspan="6">No zone has both a pet ${esc(s.name)} can take and something safe to kill at level ${player}.</td></tr>`;
+  const best = huntRows[0];
+  $("hsummary").innerHTML = `<b>${huntRows.length}</b> zones where ${esc(s.name)} can take a pet and a level ${player} ` +
+    `${esc(DATA.classes[ch.class_id])} has safe experience to kill.` + (best ? ` Best: <b>${esc(best.info[0])}</b> with ` +
+    `${esc(best.pet.n)}, about <b>${pct(best.total)}</b> of a level an hour.` : "") + ` Click a zone for every mob in it.`;
+}
+
+function setView(v) {
+  view = v;
+  store.set("tab", v);
+  document.querySelectorAll(".tabs button").forEach(b => b.setAttribute("aria-selected", String(b.dataset.view === v)));
+  $("petsView").hidden = v !== "pets";
+  $("huntView").hidden = v !== "hunt";
+  render();
+}
+
+function initHunt() {
+  document.querySelectorAll(".tabs button").forEach(b => b.addEventListener("click", () => setView(b.dataset.view)));
+  for (const id of ["hterrain", "hscore", "hover"]) {
+    const v = store.get("h." + id);
+    if (v != null) $(id).value = v;
+    $(id).addEventListener("change", () => { store.set("h." + id, $(id).value); render(); });
+  }
+  if ($("hover").value === "") $("hover").value = H.overhead;
+  const flag = store.get("h.hflag");
+  if (flag != null) $("hflag").checked = flag === "1";
+  $("hflag").addEventListener("input", () => { store.set("h.hflag", $("hflag").checked ? "1" : "0"); render(); });
+  $("hsearch").addEventListener("input", render);
+  $("facsearch").addEventListener("input", () => renderFactions(character()));
+  $("facall").addEventListener("input", () => renderFactions(character()));
+  $("factions").addEventListener("toggle", () => renderFactions(character()));
+  $("ladder").addEventListener("toggle", () => { store.set("h.ladder", $("ladder").open ? "1" : "0"); render(); });
+  if (store.get("h.ladder") !== "0") $("ladder").open = true;
+  $("faclist").addEventListener("change", e => {
+    const f = e.target.dataset.f;
+    if (!f) return;
+    const over = facOverrides(), dflt = defaultMatters(character()).has(f);
+    if (e.target.checked === dflt) delete over[f]; else over[f] = e.target.checked ? 1 : 0;
+    store.set(facKey(), JSON.stringify(over));
+    render();
+  });
+  $("facreset").addEventListener("click", () => { store.set(facKey(), "{}"); render(); });
+  $("htable").tBodies[0].addEventListener("click", e => {
+    const tr = e.target.closest("tr.zone");
+    if (!tr || e.target.closest("a")) return;
+    openZone = openZone === tr.dataset.zone ? null : tr.dataset.zone;
+    render();
+  });
+  $("hfooter").innerHTML = `How this works: for each zone, every pet the charm spell can take there (the ${H.pets_per_zone} with the most DPS, ` +
+    `at or above the minimum score) is tried against every mob that spawns in the same zone, since charm breaks when you zone. ` +
+    `A mob counts if it cons above green, gives experience, doesn't lower a faction that matters, and the pet wouldn't lose more than ` +
+    `${H.survive * 100}% of its HP killing it (fight time = mob HP ÷ pet DPS; misses, mitigation and the mob's spells are ignored). ` +
+    `Each kill costs the fight, the time for the pet to regenerate what it lost, and the seconds per pull. The hour is filled with the ` +
+    `best experience per second first, each mob only as often as it spawns (spawn points × chance ÷ respawn). ` +
+    `Experience follows the server: level² × (zone multiplier + the hot zone bonus, which this database gives every open zone) × the NPC's experience percent, light blue and level-51+ ` +
+    `bonuses within 5 levels, the per-level modifiers and the 12.5%-a-kill cap. Solo, with no experience going to AA. Since Luclin a mob your pet kills ` +
+    `without any damage from you gives 25%, so land a nuke or DoT on each. The numbers are for comparing zones; real rates are lower. ` +
+    `Factions: the defaults are every faction with merchants, bankers, guildmasters or guards, minus ones PQ Companion last saw ` +
+    `you scowling or threatening with. "Starts scowling" is from race, class and deity only and doesn't switch a faction off. ` +
+    `Faction choices are saved per character in this browser.`;
+  const tab = store.get("tab");
+  if (tab === "hunt") setView("hunt");
+}
+initHunt();
 </script>
 </body>
 </html>
