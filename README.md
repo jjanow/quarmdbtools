@@ -225,6 +225,13 @@ The page has:
   - merchants, bankers and guildmasters;
   - Veksar's level 50+ NPCs;
   - untargetable and trigger body types.
+- **Terrain.** A charm break is far easier to survive in the open, so each spawn zone is tagged
+  outdoor, mixed (partly open: castle grounds, ruins, Kael Drakkel), city or dungeon, and each NPC
+  takes the most open zone it spawns in. The database has no reliable outdoor flag, so the
+  zones are classified by hand (`TERRAIN_ZONES` in `charm.py`). Instanced copies take their base
+  zone's terrain. "Outdoor first" (on by default) ranks outdoor NPCs above mixed, city and dungeon
+  ones, then by whichever column you sort. The Zones filter can show outdoor only, or outdoor and
+  mixed.
 - **Filters.** The level range defaults to the cap minus 15 up to the cap. Other filters: named only,
   show raid targets (hidden by default), show NPCs that never spawn, only spawns live in the
   current era, and search by NPC or zone. Download CSV saves the current view. The page remembers
@@ -261,8 +268,9 @@ Tests use only the standard library. They cover:
 - research needs (`tests/test_research_needs.py`): recipe classes and dedupe, shared-bank merging,
   alternative recipes, owned scrolls and duplicate flags;
 - charm targets (`tests/test_charm.py`): special abilities, the DPS model, charm rules (level cap,
-  body types, immunities), spell choice, scoring and merging repeated NPCs, plus checks against the
-  real database when it's present (Ryklo ranks near the top for Boltran's Agacerie);
+  body types, immunities), spell choice, scoring, merging repeated NPCs and zone terrain, plus checks
+  against the real database when it's present (Ryklo ranks near the top for Boltran's Agacerie and
+  is outdoors, and every zone with spawns is classified);
 - the `./quarm` entry point (`tests/test_frontend.py`): tool discovery, serving by default, command
   dispatch, the server's pages and error responses, and the research page's placeholders.
 

@@ -174,6 +174,28 @@ class MergeCopiesTest(unittest.TestCase):
         self.assertEqual(out[0]["z"], [["air", "Plane of Sky", 0, 3, 100, 300, True]])
 
 
+class TerrainTest(unittest.TestCase):
+    def test_zones(self):
+        self.assertEqual(charm.zone_terrain("dawnshroud"), "outdoor")
+        self.assertEqual(charm.zone_terrain("blackburrow"), "dungeon")
+        self.assertEqual(charm.zone_terrain("karnor"), "mixed")
+        self.assertEqual(charm.zone_terrain("qeynos"), "city")
+        self.assertEqual(charm.zone_terrain("nowhere"), "unknown")
+        self.assertEqual(charm.zone_terrain("chardok_instanced"), "dungeon")
+        self.assertEqual(charm.zone_terrain("dreadlands_instanced"), "outdoor")
+        self.assertEqual(charm.zone_terrain("injustice30"), "dungeon")
+
+    def test_each_zone_once(self):
+        listed = [z for zones in charm.TERRAIN_ZONES.values() for z in zones.split()]
+        self.assertEqual(len(listed), len(set(listed)))
+
+    def test_best_terrain(self):
+        zones = [["blackburrow", "", 0, 1, 100, 1, True], ["qeytoqrg", "", 0, 1, 100, 1, False]]
+        self.assertEqual(charm.best_terrain(zones), "outdoor")
+        self.assertEqual(charm.best_terrain(zones, live_only=True), "dungeon")
+        self.assertEqual(charm.best_terrain([]), "unknown")
+
+
 class LoadCharmSpellsTest(unittest.TestCase):
     def test_cap_from_charm_slot(self):
         conn = sqlite3.connect(":memory:")
@@ -214,6 +236,15 @@ class RealDatabaseTest(unittest.TestCase):
 
     def test_ryklo_not_undead(self):
         self.assertNotIn("Ryklo Rikes", self.top(198, 1))
+
+    def test_every_spawning_zone_classified(self):
+        # Zones with a zone row (a long name); a few custom zones without one stay "unknown".
+        zones = {z[0] for r in self.data["npcs"] for z in r["z"] if z[1] != z[0]}
+        self.assertEqual(sorted(z for z in zones if charm.zone_terrain(z) == "unknown"), [])
+
+    def test_ryklo_outdoor(self):
+        ryklo = next(r for r in self.data["npcs"] if r["n"] == "Ryklo Rikes")
+        self.assertEqual(charm.best_terrain(ryklo["z"]), "outdoor")
 
     def test_new_characters(self):
         new = {c["class_id"]: c["spell"] for c in self.data["characters"] if c.get("new")}

@@ -31,10 +31,15 @@ Power is relative to level: each NPC's DPS, hit points and AC are divided by the
 NPCs of the same level (ones that spawn, aren't raid targets, merchants or untargetable), and the
 score is the weighted geometric mean of those ratios (DPS 50%, HP 30%, AC 20%), each capped at 5x. A score of 1 is a
 typical mob for its level; Ryklo Rikes in The Dawnshroud Peaks scores far above that.
+
+Each spawn zone is classified by hand as outdoor, mixed (partly open), city or dungeon
+(TERRAIN_ZONES), since a charm break is far easier to survive in the open. The page ranks outdoor
+NPCs first by default and can show outdoor zones only.
 """
 import argparse
 import csv
 import json
+import re
 import statistics
 import sys
 from collections import defaultdict
@@ -63,6 +68,61 @@ IMMUNE_CLASSES = set(range(20, 35)) | {40, 41, 59}
 # Untargetable, trigger and swarm-pet body types: not real mobs.
 JUNK_BODIES = {11, 60, 63, 65, 66, 67}
 VEKSAR = "veksar"
+
+# Where a charm break is survivable: outdoors you can run, gate or root in the open; in a dungeon a broken
+# pet pulls its neighbours. The database has no reliable outdoor flag (zone.sky and castoutdoor mark
+# Blackburrow as outdoor and The Dawnshroud Peaks as not), so zones are classified by hand.
+# "mixed" is partly open: castle grounds, open ruins, an outdoor city of giants.
+TERRAIN_ZONES = {
+    "outdoor": """
+        airplane air_instanced arena beholder butcher cauldron commons ecommons eastkarana erudsxing everfrost
+        feerrott gfaydark innothule kerraridge kithicor lakerathe lavastorm lfaydark misty nektulos northkarana nro
+        oasis oot qey2hh1 qeytoqrg rathemtn southkarana sro steamfont tox
+        burningwood dreadlands emeraldjungle fieldofbone firiona frontiermtns lakeofillomen overthere skyfire
+        stonebrunt swampofnohope timorous towerbone trakanon warslikswood
+        cobaltscar eastwastes iceclad mischiefplane westwastes
+        dawnshroud fearplane fear_instanced greatdivide grimling growthplane hollowshade jaggedpine letalis maiden
+        mseru scarlet shadeweaver tenebrous thegrey twilight umbral wakening
+        poair poeartha poearthb pofire podisease ponightmare postorms potimea povalor""",
+    "mixed": """
+        citymist crushbone highpass kael karnor mistmoore skyshrine unrest bothunder hohonora""",
+    "city": """
+        akanon bazaar cabeast cabwest cshome erudnext erudnint felwithea felwitheb freporte freportn freportw grobb
+        halas kaladima kaladimb katta neriaka neriakb neriakc nexus oggok paineel poknowledge potranquility qeynos
+        qeynos2 qrg rivervale sharvahl shadowhaven soltemple sseru thurgadina""",
+    "dungeon": """
+        befallen blackburrow cazicthule cazicthule_old codecay guktop gukbottom highkeep hole hole_instanced najena
+        paw permafrost qcat runnyeye soldunga soldungb
+        chardok dalnir droga kaesora kurn nurga sebilis towerfrost veeshan warrens
+        crystal frozenshadow necropolis sirens sleeper templeveeshan thurgadinb veksar velketor
+        acrylia akheva charasis echo fungusgrove griegsend hateplane hate_instanced kedge netherbian paludal
+        ssratemple thedeep vexthal
+        hohonorb nightmareb pojustice poinnovation potactics potimeb potorment powater solrotower""",
+}
+ZONE_TERRAIN = {z: t for t, zones in TERRAIN_ZONES.items() for z in zones.split()}
+# Lower is better for surviving a charm break. Unclassified zones sort with cities.
+TERRAIN_RANK = {"outdoor": 0, "mixed": 1, "city": 2, "unknown": 2, "dungeon": 3}
+
+
+# Spawn zones with no zone row: instanced copies of a zone and a few one-offs.
+ZONE_ALIASES = {"mischiefhouse": "hateplane", "iceclad2": "iceclad", "cshome2": "cshome"}
+
+
+def zone_terrain(zone):
+    """The zone's terrain. Instanced copies ("chardok_instanced", "injustice3") take their base zone's."""
+    if zone in ZONE_TERRAIN:
+        return ZONE_TERRAIN[zone]
+    base = re.sub(r"_instanced$", "", zone)
+    base = ZONE_ALIASES.get(base, base)
+    if base not in ZONE_TERRAIN and base.startswith("injustice"):
+        base = "pojustice"
+    return ZONE_TERRAIN.get(base, "unknown")
+
+
+def best_terrain(zones, live_only=False):
+    """The most open terrain among an NPC's spawn zones (page rows: z[0] = zone, z[6] = live)."""
+    terrains = [zone_terrain(z[0]) for z in zones if z[6] or not live_only]
+    return min(terrains, key=TERRAIN_RANK.get, default="unknown")
 WEIGHTS = {"dps": 0.5, "hp": 0.3, "ac": 0.2}
 # Pool neighbouring levels into a level's baseline until it has this many NPCs.
 BASELINE_MIN = 30
@@ -90,7 +150,7 @@ BODY_NAMES = {0: "", 1: "Humanoid", 2: "Lycanthrope", 3: "Undead", 4: "Giant", 5
               33: "Boxes", 34: "Muramite"}
 PQDI_NPC = "https://www.pqdi.cc/npc/{}"
 
-CSV_FIELDS = ["npc_id", "name", "level", "maxlevel", "class", "body", "score", "dps", "dps_ratio", "hp", "hp_ratio",
+CSV_FIELDS = ["npc_id", "name", "level", "maxlevel", "class", "body", "terrain", "score", "dps", "dps_ratio", "hp", "hp_ratio",
               "ac", "ac_ratio", "hp_regen", "mr", "min_hit", "max_hit", "delay", "hits_per_round", "abilities",
               "raid_target", "zones", "pqdi_url"]
 
@@ -374,8 +434,8 @@ def candidate(n):
         "rd": round(n["dps_ratio"], 2), "rh": round(n["hp_ratio"], 2), "ra": round(n["ac_ratio"], 2),
         "s": round(n["score"], 2), "t": tags, "cs": n["caster"], "raid": n["raid"],
         "named": is_named(n["raw_name"]) or n["rare"],
-        "z": [[s["zone"], s["zone_name"], s["expansion"], s["points"], s["chance"], s["respawn"], s["live"]]
-              for s in n["spawns"]],
+        "z": [[s["zone"], s["zone_name"], s["expansion"], s["points"], s["chance"], s["respawn"], s["live"],
+               zone_terrain(s["zone"])] for s in n["spawns"]],
     }
 
 
@@ -429,7 +489,7 @@ def gather(db_path, eq_dir, pqc_db, era=DEFAULT_ERA):
         "classes": {c: n for c, n in CHARM_CLASSES.items()}, "npc_classes": NPC_CLASSES, "bodies": BODY_NAMES,
         "target_labels": TARGET_LABELS, "target_bodies": {t: sorted(b) if b else None for t, b in TARGET_BODIES.items()},
         "baselines": {lvl: {k: round(v, 1) for k, v in b.items()} for lvl, b in baselines.items()},
-        "weights": WEIGHTS, "level_window": LEVEL_WINDOW, "db_version": source.get("source_version", "?"), "era": era,
+        "terrain_rank": TERRAIN_RANK, "weights": WEIGHTS, "level_window": LEVEL_WINDOW, "db_version": source.get("source_version", "?"), "era": era,
     }
 
 
@@ -441,7 +501,8 @@ def csv_rows(data, spell_id=None):
             continue
         yield {
             "npc_id": r["id"], "name": r["n"], "level": r["l"], "maxlevel": r["ml"],
-            "class": NPC_CLASSES.get(r["c"], r["c"]), "body": BODY_NAMES.get(r["b"], r["b"]), "score": r["s"],
+            "class": NPC_CLASSES.get(r["c"], r["c"]), "body": BODY_NAMES.get(r["b"], r["b"]),
+            "terrain": best_terrain(r["z"]), "score": r["s"],
             "dps": r["dps"], "dps_ratio": r["rd"], "hp": r["hp"], "hp_ratio": r["rh"], "ac": r["ac"],
             "ac_ratio": r["ra"], "hp_regen": r["rg"], "mr": r["mr"], "min_hit": r["mn"], "max_hit": r["mx"],
             "delay": r["dl"] / 10, "hits_per_round": r["h"], "abilities": "; ".join(r["t"]),
@@ -503,10 +564,12 @@ def run(args):
             continue
         low = max(1, spell["cap"] - LEVEL_WINDOW)
         top = [r for r in data["npcs"] if not r["raid"] and any(z[6] for z in r["z"]) and r["l"] >= low and
-               can_charm(spell, {"immune": "", "body": r["b"], "level": r["l"]})][:5]
+               can_charm(spell, {"immune": "", "body": r["b"], "level": r["l"]})]
+        top.sort(key=lambda r: TERRAIN_RANK[best_terrain(r["z"], live_only=True)])  # stable: score order within
         print(f"{ch['name']} ({CHARM_CLASSES[ch['class_id']]} {ch['level']}), {spell['name']} "
-              f"(up to level {spell['cap']}, {TARGET_LABELS[spell['targettype']]}): top from level {low} up: "
-              + ", ".join(f"{r['n']} L{r['l']} ({r['s']:.2f})" for r in top))
+              f"(up to level {spell['cap']}, {TARGET_LABELS[spell['targettype']]}): top from level {low} up, "
+              f"outdoor first: " + ", ".join(f"{r['n']} L{r['l']} ({r['s']:.2f}, {best_terrain(r['z'], True)})"
+                                             for r in top[:5]))
     if data["skipped"]:
         print("skipped (not a charm class): " + ", ".join(data["skipped"]))
     print(f"wrote {args.out}\nwrote {args.csv}")

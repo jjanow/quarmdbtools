@@ -71,6 +71,11 @@ ul.plain { margin: 0; padding: 0; list-style: none; }
 .tag.named { background: none; border: 1px solid var(--dup); color: var(--dup); }
 .tag.raid, .tag.bad { background: none; border: 1px solid var(--warn); color: var(--warn); }
 .dead { color: var(--done); text-decoration: line-through; }
+.terrain { display: inline-block; font-size: 11px; line-height: 1.5; padding: 0 6px; border-radius: 999px; border: 1px solid currentColor; white-space: nowrap; }
+.terrain.outdoor { color: var(--ok); }
+.terrain.mixed { color: var(--accent); }
+.terrain.city, .terrain.unknown { color: var(--muted); }
+.terrain.dungeon { color: var(--warn); }
 .spellinfo { background: var(--accent-soft); border: 1px solid var(--border); border-radius: 12px; padding: 8px 14px; margin: 0 0 12px; }
 details summary { cursor: pointer; color: var(--accent); }
 footer { color: var(--muted); font-size: 12px; margin-top: 14px; }
@@ -91,6 +96,10 @@ footer { color: var(--muted); font-size: 12px; margin-top: 14px; }
     <label>Search <input id="search" type="search" placeholder="NPC or zone"></label>
     <label>Min level <input id="minlvl" type="number" min="1" max="65"></label>
     <label>Max level <input id="maxlvl" type="number" min="1" max="65"></label>
+    <label>Zones <select id="terrain">
+      <option value="3">All</option><option value="1">Outdoor &amp; mixed</option><option value="0">Outdoor only</option>
+    </select></label>
+    <label class="check"><input id="outfirst" type="checkbox" checked> Outdoor first</label>
     <label class="check"><input id="named" type="checkbox"> Named only</label>
     <label class="check"><input id="raid" type="checkbox"> Show raid targets</label>
     <label class="check"><input id="nospawn" type="checkbox"> Show NPCs that never spawn</label>
@@ -114,6 +123,12 @@ const spellUrl = id => `https://www.pqdi.cc/spell/${id}`;
 const SPELLS = Object.fromEntries(DATA.spells.map(s => [s.id, s]));
 const EXPANSIONS = ["Classic", "Kunark", "Velious", "Luclin", "Planes of Power"];
 const PAGE = 300;
+const RANK = DATA.terrain_rank;
+const TERRAIN_TITLES = {outdoor: "Open zone: a charm break is easy to survive", mixed: "Partly open (castle grounds, ruins)",
+  city: "City: guards and crowds", dungeon: "Dungeon: a broken pet brings its neighbours", unknown: "Not classified"};
+const terrainTag = t => `<span class="terrain ${t}" title="${TERRAIN_TITLES[t] || ""}">${t}</span>`;
+// The most open terrain among the zones shown for an NPC.
+const terrain = r => zones(r).reduce((best, z) => RANK[z[7]] < RANK[best] ? z[7] : best, "unknown");
 let shown = PAGE;
 let sort = {key: "s", dir: -1};
 
@@ -124,10 +139,10 @@ const respawn = s => !s ? "" : s >= 3600 ? `${+(s / 3600).toFixed(1)}h` : s >= 6
 
 // A zone entry is [short, long name, expansion, spawn points, best chance %, fastest respawn s, live in era].
 function zonesHtml(r) {
-  const li = z => `<li class="${z[6] ? "" : "dead"}" title="${z[6] ? "" : "not live in this era"}"><b>${esc(z[1])}</b> ` +
+  const li = z => `<li class="${z[6] ? "" : "dead"}" title="${z[6] ? "" : "not live in this era"}"><b>${esc(z[1])}</b> ${terrainTag(z[7])} ` +
     `<span class="small">${z[3] > 1 ? `${z[3]} spawns · ` : ""}${z[4] < 100 ? `${fmt(z[4], z[4] < 10 ? 1 : 0)}% chance · ` : ""}` +
     `${respawn(z[5]) ? `respawn ${respawn(z[5])}` : ""}${z[2] != null ? ` · ${EXPANSIONS[z[2]] || "era " + z[2]}` : ""}</span></li>`;
-  const zs = zones(r), first = zs.slice(0, 2), rest = zs.slice(2);
+  const zs = [...zones(r)].sort((a, b) => RANK[a[7]] - RANK[b[7]] || b[6] - a[6]), first = zs.slice(0, 2), rest = zs.slice(2);
   if (!zs.length) return `<span class="small">no spawn point</span>`;
   return `<ul class="plain">${first.map(li).join("")}</ul>` + (rest.length ?
     `<details class="small"><summary>+${rest.length} more</summary><ul class="plain">${rest.map(li).join("")}</ul></details>` : "");
@@ -143,6 +158,8 @@ const COLUMNS = [
     text: r => r.ml > r.l ? `${r.l}-${r.ml}` : r.l},
   {key: "s", label: "Score", num: true, title: "Weighted geometric mean of the DPS, HP and AC ratios to a typical NPC of this level",
     html: r => `<span class="score ${r.s >= 1.5 ? "hi" : r.s < 0.8 ? "lo" : ""}">${fmt(r.s, 2)}</span>`},
+  {key: "tr", label: "Terrain", title: "Most open zone it spawns in: outdoor, mixed, city or dungeon",
+    html: r => r.z.length ? terrainTag(terrain(r)) : "", text: r => r.z.length ? terrain(r) : "", sortVal: r => RANK[terrain(r)]},
   {key: "dps", label: "DPS", num: true, title: "Estimated melee damage per second as a charmed pet", html: r => fmt(r.dps, 1)},
   {key: "rd", label: "DPS ×", num: true, title: "DPS ÷ median DPS of NPCs this level", html: r => ratio(r.rd)},
   {key: "hp", label: "HP", num: true, html: r => fmt(r.hp)},
@@ -207,13 +224,19 @@ function filtered() {
   if (!s) return [];
   const q = $("search").value.trim().toLowerCase();
   const lo = Number($("minlvl").value) || 0, hi = Number($("maxlvl").value) || 99;
+  const maxRank = Number($("terrain").value), outFirst = $("outfirst").checked;
   const named = $("named").checked, raid = $("raid").checked, nospawn = $("nospawn").checked, live = $("live").checked;
   const rows = DATA.npcs.filter(r => canCharm(s, r) && r.l >= lo && r.l <= hi &&
     (!named || r.named) && (raid || !r.raid) && (nospawn ? true : r.z.length) && (!live || !r.z.length && nospawn || r.z.some(z => z[6])) &&
+    (maxRank >= 3 || RANK[terrain(r)] <= maxRank) &&
     (!q || r.n.toLowerCase().includes(q) || r.z.some(z => z[1].toLowerCase().includes(q) || z[0].includes(q))));
   const col = COLUMNS.find(c => c.key === sort.key) || COLUMNS[2];
   const val = col.sortVal || (r => r[col.key]);
   rows.sort((a, b) => {
+    if (outFirst) {
+      const t = RANK[terrain(a)] - RANK[terrain(b)];
+      if (t) return t;
+    }
     const x = val(a), y = val(b);
     const c = typeof x === "number" && typeof y === "number" ? x - y : String(x).localeCompare(String(y), undefined, {numeric: true});
     return c * sort.dir || b.s - a.s;
@@ -240,9 +263,10 @@ function render() {
     || `<tr><td colspan="${COLUMNS.length}">Nothing to show.</td></tr>`;
   $("more").hidden = rows.length <= shown;
   $("more").textContent = `Show ${Math.min(PAGE, rows.length - shown)} more of ${rows.length - shown} remaining`;
-  const strong = rows.filter(r => r.s >= 1.5).length;
+  const strong = rows.filter(r => r.s >= 1.5).length, outdoor = rows.filter(r => r.z.length && terrain(r) === "outdoor");
   $("summary").innerHTML = s ? `<b>${rows.length}</b> NPCs ${esc(s.name)} can charm in this level range, ` +
     `<b>${strong}</b> of them scoring 1.5× or more a typical mob of their level. ` +
+    `<b>${outdoor.length}</b> spawn outdoors (<b>${outdoor.filter(r => r.s >= 1.5).length}</b> of those at 1.5× or more). ` +
     `Showing ${Math.min(rows.length, shown)}.` : "";
 }
 
@@ -289,12 +313,15 @@ function init() {
     setLevelRange(); shown = PAGE; render();
   });
   ["minlvl", "maxlvl"].forEach(id => $(id).addEventListener("input", () => { saveRange(); shown = PAGE; render(); }));
-  for (const id of ["named", "raid", "nospawn", "live"]) {
+  for (const id of ["named", "raid", "nospawn", "live", "outfirst"]) {
     const v = store.get("opt." + id);
     if (v != null) $(id).checked = v === "1";
     $(id).addEventListener("input", () => { store.set("opt." + id, $(id).checked ? "1" : "0"); shown = PAGE; render(); });
   }
   $("search").addEventListener("input", () => { shown = PAGE; render(); });
+  const savedTerrain = store.get("opt.terrain");
+  if (savedTerrain != null) $("terrain").value = savedTerrain;
+  $("terrain").addEventListener("input", () => { store.set("opt.terrain", $("terrain").value); shown = PAGE; render(); });
   $("table").tHead.addEventListener("click", e => {
     const th = e.target.closest("th");
     if (!th) return;
@@ -312,7 +339,9 @@ function init() {
     `A charmed pet keeps the NPC's own stats. DPS is estimated from the server's charmed pet code: attacks per round, ` +
     `double attack by level, triple attack for level 60+ warriors and monks, dual wield only for NPCs flagged with it ` +
     `(offhand weapons from loot aren't counted), average of min and max hit. Charmed pets never flurry or rampage. ` +
-    `Misses, kicks and bashes, and spells are ignored. Not charmable and left out: NPCs immune to charm, magic or players, ` +
+    `Terrain is each zone classified by hand: outdoor, mixed (partly open: castle grounds, ruins), city or dungeon; ` +
+    `an NPC's terrain is the most open zone it spawns in. "Outdoor first" ranks outdoor NPCs above mixed, city and ` +
+    `dungeon ones, then by the chosen column. Misses, kicks and bashes, and spells are ignored. Not charmable and left out: NPCs immune to charm, magic or players, ` +
     `merchants, bankers and guildmasters, Veksar's level 50+ NPCs. Struck-out zones aren't live in ` +
     `${EXPANSIONS[DATA.era] || "era " + DATA.era}. Database dump ${esc(DATA.db_version)}.` +
     (DATA.skipped.length ? ` Skipped (not a charm class): ${esc(DATA.skipped.join(", "))}.` : "");
